@@ -1,0 +1,11 @@
+{
+  "id": "case-06-mount-missing",
+  "title": "挂载缺失 → 拒绝开跑",
+  "description": "把挂载根指到一个不存在的目录。系统必须在任务开始前就报 MOUNT_NOT_FOUND 并停下，而不是绕路去猜别的路径。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "mount-not-found",
+  "dataset_id": "ds_dev_fixture",
+  "expect": {
+    "problem_code": "MOUNT_NOT_FOUND"
+  }
+}

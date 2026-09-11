@@ -1,0 +1,25 @@
+{
+  "id": "case-01-four-fields",
+  "title": "四字段回填（模型全流程）",
+  "description": "最常用的基准场景：模型自己探测模板与 XML，写出计划，Dry-Run 通过后执行，每个 SN 产出一个 Excel。这条用例真的调用模型，也是唯一会产生 token 成本的两条之一。",
+  "kind": "agent",
+  "dataset_id": "ds_dev_fixture",
+  "auto_execute": true,
+  "request": "每个 SN 下面找到 test report 文件。\n模板每个 Sheet 的 P 列保存 Case 名称，根据 P 列匹配 XML 中 task 的 name。\n提取对应 task 下面 item 的 ge、gr、te、nf，分别写入模板同一行的 F、H、J、L 列。\n每个 SN 生成一个独立的 Excel 文件。",
+  "expect": {
+    "status": [
+      "COMPLETED",
+      "COMPLETED_WITH_WARNINGS"
+    ],
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 3,
+    "tool_calls": [
+      "inspect_xml_schema",
+      "submit_resolved_plan",
+      "validate_report_plan",
+      "execute_validated_plan"
+    ]
+  }
+}

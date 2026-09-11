@@ -1,0 +1,16 @@
+{
+  "providers": {
+    "custom": {
+      "baseUrl": "$REPORT_LLM_BASE_URL",
+      "api": "openai-completions",
+      "apiKey": "$REPORT_LLM_API_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        { "id": "qwen3-max" }
+      ]
+    }
+  }
+}

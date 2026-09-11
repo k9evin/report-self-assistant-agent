@@ -1,0 +1,77 @@
+{
+  "id": "case-12-messy-block",
+  "title": "脏数据：重复键按 block 策略在 Dry-Run 就被拦下",
+  "description": "一万行真实规模 + 脏数据（缺失 task、多余 task、Case 名带前后空格、同一 task 重复出现、个别 task 缺 item），策略是 block：必须在 Dry-Run 的 source_schema_valid 就失败、报出 DUPLICATE_SOURCE_KEY，并且一个 Excel 都不产出。拦阻点本来就在预演——写「执行阶段逐 SN 失败」是错的，那时候执行压根不会启动。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "validate-plan",
+  "dataset_id": "ds_big_messy",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "status": [
+      "rejected"
+    ],
+    "execution_allowed": false,
+    "gates": "not_all_pass",
+    "error_codes": [
+      "DUPLICATE_SOURCE_KEY"
+    ],
+    "output_xlsx": 0,
+    "not_tool_calls": [
+      "execute_validated_plan"
+    ]
+  }
+}

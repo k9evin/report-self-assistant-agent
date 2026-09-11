@@ -1,0 +1,12 @@
+{
+  "id": "case-11-scale-context",
+  "title": "上万行时探测证据仍是 KB 级（上下文安全）",
+  "description": "模板 1 万行时，模板探测必须如实报出 10004 行（不能被采样截断成假结论），且探测证据文件仍是 KB 级——否则 Agent 第一轮就被自己的工具输出淹掉，后面全是幻觉。",
+  "kind": "deterministic",
+  "scenario": "scale-inspect",
+  "dataset_id": "ds_big_fixture",
+  "expect": {
+    "template_max_row": 10004,
+    "artifact_max_kb": 32
+  }
+}

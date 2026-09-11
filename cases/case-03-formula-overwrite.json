@@ -1,0 +1,74 @@
+{
+  "id": "case-03-formula-overwrite",
+  "title": "目标列覆盖公式 → 必须阻断",
+  "description": "计划把 ge 也写进 G 列，而 G5/G8 有公式。写入安全 Gate 必须拦下，execution_allowed 必须为 false。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "validate-plan",
+  "dataset_id": "ds_dev_fixture",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        },
+        {
+          "source_field": "ge",
+          "target_column": "G"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": false,
+    "gates": "not_all_pass",
+    "error_codes": [
+      "FORMULA_OVERWRITE"
+    ]
+  }
+}

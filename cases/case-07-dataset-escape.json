@@ -1,0 +1,11 @@
+{
+  "id": "case-07-dataset-escape",
+  "title": "数据集路径越界 → 拒绝读取",
+  "description": "注册表里的相对路径写成 ../outside，realpath 之后落在挂载根之外。必须报 DATASET_OUTSIDE_MOUNT_ROOT——这是「模型拿不到宿主路径」的底线。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "dataset-escape",
+  "dataset_id": "ds_dev_fixture",
+  "expect": {
+    "problem_code": "DATASET_OUTSIDE_MOUNT_ROOT"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "id": "case-09-scale-parallel",
+  "title": "并行与串行写出完全一致，且真的更快",
+  "description": "同一批 SN 分别用 1 个进程和 N 个进程各执行一次：单元格总数、逐 SN 结论必须完全一致（并行化最怕的就是悄悄写错），同时并行必须至少快 1.6 倍。核数不足 4 时只比对内容、跳过加速比判定。",
+  "kind": "deterministic",
+  "scenario": "scale-parallel",
+  "dataset_id": "ds_big_fixture",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "limit": 4,
+  "expect": {
+    "sn_total": 4,
+    "cells_written": 160000,
+    "sn_failed": 0,
+    "min_speedup": 1.6
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "mount_roots": {
+    "mfs": {
+      "unc": "\\\\mfs-srv.example.com\\Data",
+      "linux": "/mnt/mfs/mfs-srv.example.com/Data",
+      "macos": "/Volumes/mfs/mfs-srv.example.com/Data",
+      "credential_ref": "vault://smb/mfs-readonly"
+    },
+    "dev": {
+      "unc": null,
+      "linux": "/tmp/report-fixture",
+      "macos": "/tmp/report-fixture",
+      "credential_ref": null
+    },
+    "big": {
+      "unc": null,
+      "linux": "/tmp/report-big",
+      "macos": "/tmp/report-big",
+      "credential_ref": null
+    },
+    "bigmessy": {
+      "unc": null,
+      "linux": "/tmp/report-big-messy",
+      "macos": "/tmp/report-big-messy",
+      "credential_ref": null
+    },
+    "bigmulti": {
+      "unc": null,
+      "linux": "/tmp/report-big-multifile",
+      "macos": "/tmp/report-big-multifile",
+      "credential_ref": null
+    }
+  },
+  "datasets": [
+    {
+      "dataset_id": "ds_example_10001_2000000001",
+      "name": "示例 MFG 测试数据",
+      "mount_root_id": "mfs",
+      "unc_path": "\\\\mfs-srv.example.com\\Data\\TestData\\WS01\\WS1-OA-Module\\10001\\2000000001",
+      "relative_path": "TestData/WS01/WS1-OA-Module/10001/2000000001",
+      "access": "read_only",
+      "allowed_users": ["demo-user"],
+      "credential_ref": "vault://smb/mfs-readonly"
+    },
+    {
+      "dataset_id": "ds_dev_fixture",
+      "name": "本地夹具（开发/验证用，非生产数据）",
+      "mount_root_id": "dev",
+      "unc_path": null,
+      "relative_path": "TD28",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    },
+    {
+      "dataset_id": "ds_big_fixture",
+      "name": "真实规模夹具（1 万行 / 12 个 SN，生成方式见 tests/make_big_fixture.py）",
+      "mount_root_id": "big",
+      "unc_path": null,
+      "relative_path": "TD28",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    },
+    {
+      "dataset_id": "ds_big_messy",
+      "name": "真实规模 + 脏数据（缺失/多余/前后空格/重复 task/缺字段）",
+      "mount_root_id": "bigmessy",
+      "unc_path": null,
+      "relative_path": "TD28",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    },
+    {
+      "dataset_id": "ds_big_multifile",
+      "name": "真实规模 + 每个 SN 多份历史报告（验 latest_mtime 选最新）",
+      "mount_root_id": "bigmulti",
+      "unc_path": null,
+      "relative_path": "TD28",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    }
+  ]
+}

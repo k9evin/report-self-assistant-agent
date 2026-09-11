@@ -1,0 +1,69 @@
+{
+  "id": "case-05-deterministic-backfill",
+  "title": "确定性回填（无模型）",
+  "description": "用一份已知正确的计划直接走 Dry-Run + 执行：五道 Gate 全通过、3 个 Excel、公式与非目标单元格原样保留。这条不调用模型，可当作回归基线。",
+  "kind": "deterministic",
+  "scenario": "validate-and-execute",
+  "dataset_id": "ds_dev_fixture",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 3
+  }
+}

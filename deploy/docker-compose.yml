@@ -1,0 +1,42 @@
+# 业务平台（FastAPI/Next.js）之外的执行容器。
+#
+# 关键点：数据源以 **:ro** 绑定进容器 —— 即使应用层出 bug，内核也不会让源数据被改写。
+# 宿主机上先用 deploy/mount-mfs-readonly.sh 把 SMB 共享只读挂到 /mnt/mfs/<server>/Data。
+#
+#   cd deploy && docker compose up -d --build
+#   docker compose exec app ./node_modules/.bin/tsx src/cli.ts datasets
+#   docker compose exec app ./node_modules/.bin/tsx src/cli.ts plan \
+#     --request "..." --dataset ds_example_10001_2000000001 --template /data/templates/t.xlsx
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: report-self-assistant:0.1.0
+    restart: unless-stopped
+    env_file:
+      - ../.env            # REPORT_PROVIDER / REPORT_MODEL_ID / DEEPSEEK_API_KEY 等，绝不写进镜像
+    environment:
+      REPORT_WORK_DIR: /data/work
+      REPORT_MOUNT_ROOT_MFS: /mnt/mfs/mfs-srv.example.com/Data
+    volumes:
+      # 数据源：只读。宿主机的只读 CIFS 挂载再叠加容器 ro，两层互不依赖。
+      - /mnt/mfs/mfs-srv.example.com/Data:/mnt/mfs/mfs-srv.example.com/Data:ro
+      # 任务工作目录（计划 / 验证 / 输出 / 审计事件）：唯一可写卷
+      - ../work:/data/work
+      # 业务用户上传的模板（由控制面写入）
+      - ../templates:/data/templates
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    healthcheck:
+      test: ["CMD", "python3", "/app/tools/report_tools.py", "check-dataset", "--mount-root", "/mnt/mfs/mfs-srv.example.com/Data"]
+      interval: 60s
+      timeout: 30s
+      retries: 3

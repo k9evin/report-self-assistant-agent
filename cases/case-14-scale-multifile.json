@@ -1,0 +1,73 @@
+{
+  "id": "case-14-scale-multifile",
+  "title": "真实规模 + 一个 SN 目录里多份历史报告：必须按 mtime 取最新那份",
+  "description": "每个 SN 目录里放两份报告：当天的 1 万 task，和一份 mtime 早 1 小时的历史文件（5000 task）。plan 的 multiple_match_policy 是 latest_mtime，回填结果必须来自当天那份——取错文件不会报错，只会安静地少写一半数据，这是真实数据里最难发现的一类错。4 个 SN × 10000 task × 4 字段 = 160000 个单元格；若取成历史文件会是 80000。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "scale-execute",
+  "dataset_id": "ds_big_multifile",
+  "limit": 4,
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "sn_total": 4,
+    "cells_written": 160000,
+    "sn_failed": 0,
+    "output_xlsx": 4
+  }
+}

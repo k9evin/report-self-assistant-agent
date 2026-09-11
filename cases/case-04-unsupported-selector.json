@@ -1,0 +1,70 @@
+{
+  "id": "case-04-unsupported-selector",
+  "title": "不支持的选择器语法 → 必须阻断",
+  "description": "计划的 record_selector 写成 .//task[@name]（带谓词）。确定性核只支持元素/属性/文本这个子集，必须直接拒绝并给出可用候选，而不是静默不匹配。确定性用例，不花 token。",
+  "kind": "deterministic",
+  "scenario": "validate-plan",
+  "dataset_id": "ds_dev_fixture",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_test_report*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//task[@name]",
+      "key_selector": "@name",
+      "field_storage": {
+        "item_selector": "./item",
+        "field_name_selector": "@name",
+        "field_value_selector": "@value"
+      }
+    },
+    "template": {
+      "sheet_scope": "all",
+      "join": {
+        "template_key_column": "P",
+        "source_key": "task.@name",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "ge",
+          "target_column": "F"
+        },
+        {
+          "source_field": "gr",
+          "target_column": "H"
+        },
+        {
+          "source_field": "te",
+          "target_column": "J"
+        },
+        {
+          "source_field": "nf",
+          "target_column": "L"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": false,
+    "gates": "not_all_pass",
+    "error_codes": [
+      "PLAN_SELECTOR_UNSUPPORTED"
+    ]
+  }
+}

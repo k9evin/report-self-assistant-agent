@@ -1,0 +1,24 @@
+{
+  "id": "case-02-dry-run-only",
+  "title": "只预演不写文件（模型）",
+  "description": "同样走探测与计划，但用户选择「只做预演」：必须停在 Dry-Run、给出五道 Gate 与警告，并且绝不调用执行工具、输出目录里不能出现任何 Excel。",
+  "kind": "agent",
+  "dataset_id": "ds_dev_fixture",
+  "auto_execute": false,
+  "request": "每个 SN 下面找到 test report 文件。\n模板每个 Sheet 的 P 列保存 Case 名称，根据 P 列匹配 XML 中 task 的 name。\n提取对应 task 下面 item 的 ge、gr、te、nf，分别写入模板同一行的 F、H、J、L 列。\n每个 SN 生成一个独立的 Excel 文件。",
+  "expect": {
+    "status": [
+      "READY"
+    ],
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 0,
+    "tool_calls": [
+      "validate_report_plan"
+    ],
+    "not_tool_calls": [
+      "execute_validated_plan"
+    ]
+  }
+}
