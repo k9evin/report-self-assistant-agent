@@ -1,19 +1,20 @@
-/** 通用状态件：加载中 / 错误 / 空状态 / 状态药丸 / 折叠块。 */
+/** 通用状态件：加载中 / 错误 / 空状态（Tailwind + 设计令牌，与 shadcn 组件共用同一套颜色）。 */
 import type { ReactNode } from "react";
-import { useState } from "react";
 
-import type { StatusTone } from "../labels";
-import { IconAlert, IconChevron } from "./icons";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
+import { IconAlert } from "./icons";
 
 export function LoadingDots({ label }: { label: string }) {
   return (
-    <div className="loading" role="status" aria-live="polite">
-      <span className="dots" aria-hidden="true">
-        <i />
-        <i />
-        <i />
+    <div className="flex items-center gap-2.5 text-xs text-muted-foreground" role="status" aria-live="polite">
+      <span className="inline-flex gap-1" aria-hidden="true">
+        <i className="size-1.5 animate-pulse rounded-full bg-foreground/40" />
+        <i className="size-1.5 animate-pulse rounded-full bg-foreground/40 [animation-delay:150ms]" />
+        <i className="size-1.5 animate-pulse rounded-full bg-foreground/40 [animation-delay:300ms]" />
       </span>
-      <span className="muted">{label}</span>
+      <span>{label}</span>
     </div>
   );
 }
@@ -30,66 +31,22 @@ export function ErrorBox({
   retryLabel?: string;
 }) {
   return (
-    <div className="error-box" role="alert">
-      <span className="error-icon" aria-hidden="true">
+    <div
+      className="flex gap-2.5 rounded-md border border-bad/40 bg-bad/10 px-3.5 py-3 text-[13px] text-bad"
+      role="alert"
+    >
+      <span className="mt-px flex-none" aria-hidden="true">
         <IconAlert width={16} height={16} />
       </span>
-      <div className="error-body">
-        <strong>{title}</strong>
-        <p>{message}</p>
+      <div className="min-w-0">
+        <strong className="mb-0.5 block font-semibold">{title}</strong>
+        <p className="break-words">{message}</p>
         {onRetry ? (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
+          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onRetry}>
             {retryLabel}
-          </button>
+          </Button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-export function StatusPill({
-  tone,
-  children,
-  title,
-}: {
-  tone: StatusTone;
-  children: ReactNode;
-  title?: string;
-}) {
-  return (
-    <span className={`pill pill-${tone}`} title={title}>
-      {children}
-    </span>
-  );
-}
-
-export function Collapsible({
-  title,
-  hint,
-  children,
-  defaultOpen = false,
-}: {
-  title: string;
-  hint?: string;
-  children: ReactNode;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="collapse">
-      <button
-        type="button"
-        className="collapse-head"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className={`chevron ${open ? "chevron-open" : ""}`} aria-hidden="true">
-          <IconChevron width={16} height={16} />
-        </span>
-        <span className="collapse-title">{title}</span>
-        {hint ? <span className="caption">{hint}</span> : null}
-      </button>
-      {open ? <div className="collapse-body">{children}</div> : null}
     </div>
   );
 }
@@ -106,14 +63,17 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="empty">
-      <div className="empty-grid" aria-hidden="true" />
-      <div className="empty-content">
-        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h2>{title}</h2>
-        {subtitle ? <p className="muted">{subtitle}</p> : null}
+    <Card className="relative gap-0 overflow-hidden px-6 py-12 text-center shadow-none">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgb(26_115_232/0.14)_1px,transparent_1px)] bg-[size:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
+      />
+      <div className="relative mx-auto flex max-w-[620px] flex-col items-center gap-2">
+        {eyebrow ? <p className="text-xs font-semibold tracking-[0.08em] text-brand uppercase">{eyebrow}</p> : null}
+        <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
         {children}
       </div>
-    </div>
+    </Card>
   );
 }

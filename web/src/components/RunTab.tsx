@@ -175,21 +175,21 @@ export function RunTab() {
               title="选一个数据集，写下需求"
               subtitle="助手会依次探测模板与 XML 结构、提交计划、预演校验，再决定是否写入。整个过程会实时显示在这里。"
             >
-              <ul className="empty-list">
-                <li>
-                  <span className="empty-icon" aria-hidden="true">
+              <ul className="mt-4 grid gap-2 text-left text-[13px] text-muted-foreground">
+                <li className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
+                  <span className="mt-0.5 flex-none text-brand" aria-hidden="true">
                     <IconSpark width={14} height={14} />
                   </span>
                   预演（Dry-Run）不会改动任何文件，适合先确认匹配是否正确
                 </li>
-                <li>
-                  <span className="empty-icon" aria-hidden="true">
+                <li className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
+                  <span className="mt-0.5 flex-none text-brand" aria-hidden="true">
                     <IconSpark width={14} height={14} />
                   </span>
                   五道 Gate 决定是否允许写入，任一失败都会被拦住
                 </li>
-                <li>
-                  <span className="empty-icon" aria-hidden="true">
+                <li className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
+                  <span className="mt-0.5 flex-none text-brand" aria-hidden="true">
                     <IconSpark width={14} height={14} />
                   </span>
                   跑完后可以在下方继续追问，助手带着上下文接着改

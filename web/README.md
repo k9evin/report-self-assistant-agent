@@ -41,14 +41,14 @@ web/
 └── src/
     ├── main.tsx                # 挂载入口
     ├── App.tsx                 # 外壳与页签切换
-    ├── styles.css              # design tokens + Tailwind/shadcn 变量桥接 + 遗留组件样式
+    ├── styles.css              # design tokens + Tailwind/shadcn 变量桥接 + 外壳（导航/骨架）样式
     ├── types.ts                # docs/api.md 的类型镜像
     ├── api.ts                  # fetch 封装、错误提取、SSE / 下载 URL 拼装
     ├── labels.ts               # 阶段 / 工具 / Gate 中文映射与 expect 摘要
     ├── useRunStream.ts         # 一次运行的实时状态（EventSource 增量累积）+ 按轮切分
     ├── theme.ts                # 深色模式读写（localStorage + prefers-color-scheme）
     └── components/
-        ├── ui/                 # shadcn/ui 源码（button / card / badge / collapsible / select / …）
+        ├── ui/                 # shadcn/ui 源码（button / card / badge / table / collapsible / select / …）
         ├── Nav.tsx             # 顶栏：品牌、页签、主题切换
         ├── RunTab.tsx          # 页签 1：对话流 + 底部输入区（composer）
         ├── Conversation.tsx    # 对话流：用户气泡 + 助理回合（执行过程 → 汇报）
@@ -57,9 +57,11 @@ web/
         ├── PhaseBar.tsx        # 阶段条（状态机 → 中文）
         ├── ToolTimeline.tsx    # 执行步骤时间线
         ├── ReportPanel.tsx     # 助理汇报：流式文本 + 少量行内标记排版
-        ├── RunResult.tsx       # 五道 Gate、错误/警告、产物、计划/验证 JSON
+        ├── RunResult.tsx       # 五道 Gate、错误/警告、产物、计划/验证 JSON（对话框与用例行共用）
+        ├── ResultBlock.tsx     # 结果区分节（分隔线 + 标题 + 可选右侧动作）
         ├── Checks.tsx          # 用例断言（✅ / ❌ + 总判定）
-        ├── States.tsx          # 加载 / 错误 / 空状态 / 药丸 / 折叠块
+        ├── ToneBadge.tsx       # 状态药丸：StatusTone → Badge 配色（对话流与结果区共用一份映射）
+        ├── States.tsx          # 加载 / 错误 / 空状态
         └── icons.tsx           # 内联 SVG 图标
 ```
 
@@ -90,8 +92,10 @@ web/
   （`--color-primary → var(--accent-bg)`、`--color-border → var(--border)`、`--radius-xl → var(--radius-card)`…），
   所以 Tailwind 工具类与仓库自带的类名取到的是同一批颜色与圆角。深色下另有一组语义色
   （`--ui-secondary` / `--ui-subtle` / `--ui-hover` / `--ui-ring`），因为 `--gray-100` 这类灰阶不随主题变。
-- 仓库自带的旧类名（`.card` / `.pill` / `.btn` / 结果区 / 用例区）整体包在 `@layer components` 里：
-  @layer 内的规则优先级低于 Tailwind 的 utilities 层，新写的工具类才能覆盖它们。
+- 界面主体（对话流、结果区、用例清单）全部用 shadcn 组件 + Tailwind 工具类书写，
+  `@layer components` 里只剩导航与页面骨架这类没有对应组件的规则（`.nav` / `.tab` / `.btn-secondary`…）；
+  两者取到的是同一批 tokens，所以不存在「组件一套颜色、旧样式另一套颜色」。
+  加组件用 `npx shadcn@latest add <name>`，不要手工加 `clsx` / `tailwind-merge` / 逐个 `@radix-ui/*`。
 - 浅色 + 纯黑深色两套主题，`<html class="dark">` 切换；首次跟随 `prefers-color-scheme`，
   用户选择写入 `localStorage` 的 `report-agent-theme`，导航栏右侧按钮切换。
 - 窄屏（< 640px）单列、无横向滚动；`prefers-reduced-motion` 下关闭全部动画。
