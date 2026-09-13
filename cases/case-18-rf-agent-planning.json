@@ -1,0 +1,25 @@
+{
+  "id": "case-18-rf-agent-planning",
+  "title": "5G 射频校准全流程（模型自主规划 + 多 Sheet + 动态 Key 探测）",
+  "description": "真实模型端到端用例：业务需求要求回填 5G 射频校准数据。模型必须自行发现 Key 列在 B 列（而非固定 P 列），通过 inspect_xml 识别出 point 节点的 id 属性与 measure 节点度量，指定 sheet_scope 仅对 RF_Tx_Cal 回填，保护 H 列公式。完整考验 Agent 在复杂未知结构下的探测与规划能力。",
+  "kind": "agent",
+  "dataset_id": "ds_rf_calibration",
+  "auto_execute": true,
+  "request": "这是 5G 射频发射测试报告回填任务。\n模板包含 RF_Tx_Cal、Summary 和 Specs_Reference 三个工作表，只需回填 RF_Tx_Cal 表。\n在 RF_Tx_Cal 工作表中，B 列保存了测试点编号（如 TP_5G_...），根据 B 列匹配 XML 中 point 节点的 id 属性。\n从每个 point 的 measure 节点中提取 tx_pwr、evm、ber、aclr 四项度量值，分别写入同一行的 D、E、F、G 列。\n注意：H 列是计算合格状态的公式，不能覆盖；每个 SN 生成一个独立的 Excel 文件。",
+  "expect": {
+    "status": [
+      "COMPLETED",
+      "COMPLETED_WITH_WARNINGS"
+    ],
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 4,
+    "tool_calls": [
+      "inspect_xml_schema",
+      "submit_resolved_plan",
+      "validate_report_plan",
+      "execute_validated_plan"
+    ]
+  }
+}

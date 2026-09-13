@@ -43,6 +43,8 @@ export interface AppConfig {
   provider: string;
   modelId: string;
   thinkingLevel: string;
+  devModeAllowed: boolean;
+  authToken: string | null;
   mountRoots: Map<string, MountRootConfig>;
   datasets: Map<string, DatasetRecord>;
 }
@@ -146,6 +148,13 @@ export function loadConfig(overrides: Partial<Pick<AppConfig, "provider" | "mode
     provider: overrides.provider ?? process.env.REPORT_PROVIDER ?? "deepseek",
     modelId: overrides.modelId ?? process.env.REPORT_MODEL_ID ?? "deepseek-v4-pro",
     thinkingLevel: process.env.REPORT_THINKING_LEVEL ?? "medium",
+    devModeAllowed:
+      process.env.REPORT_DEV_MODE !== undefined
+        ? process.env.REPORT_DEV_MODE !== "false" &&
+          process.env.REPORT_DEV_MODE !== "0" &&
+          process.env.REPORT_DEV_MODE !== "off"
+        : process.env.NODE_ENV !== "production",
+    authToken: (process.env.REPORT_AUTH_TOKEN ?? process.env.REPORT_AUTH_PASSWORD ?? "").trim() || null,
     mountRoots,
     datasets,
   };

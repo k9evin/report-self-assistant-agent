@@ -5,7 +5,7 @@ export const PHASE_LABELS: Record<string, string> = {
   CREATED: "已创建",
   INSPECTING: "探测中",
   PLANNING: "计划中",
-  VALIDATING: "预演校验中",
+  VALIDATING: "门禁校验中",
   NEEDS_REPLAN: "需修正",
   BLOCKED: "被阻断",
   READY: "可执行",

@@ -50,12 +50,20 @@ interface RunState {
   started_at: string;
   finished_at: string | null;
   duration_ms: number | null;
+  tag: string | null;
+  pinned: boolean;
 }
 
-const runs = new Map<string, RunState>();
-const subscribers = new Map<string, Set<(event: RunEvent | { type: "done"; run: RunState } | { type: "error"; message: string } | { type: "snapshot"; run: RunState }) => void>>();
+type ServerEvent =
+  | RunEvent
+  | { type: "done"; run: RunState }
+  | { type: "error"; message: string }
+  | { type: "snapshot"; run: RunState };
 
-function emit(runId: string, event: RunEvent | { type: "done"; run: RunState } | { type: "error"; message: string }) {
+const runs = new Map<string, RunState>();
+const subscribers = new Map<string, Set<(event: ServerEvent) => void>>();
+
+function emit(runId: string, event: ServerEvent) {
   for (const listener of subscribers.get(runId) ?? []) listener(event);
 }
 
@@ -159,7 +167,7 @@ function datasetViews(config: AppConfig) {
 
 let runSeq = 0;
 
-function newRunState(kind: "free" | "case", datasetId: string, request: string, autoExecute: boolean, caseId: string | null): RunState {
+function newRunState(kind: "free" | "case", datasetId: string, request: string, autoExecute: boolean, caseId: string | null, tag: string | null = null): RunState {
   runSeq += 1;
   const run: RunState = {
     run_id: `run-${Date.now().toString(36)}-${runSeq.toString(36)}`,
@@ -183,6 +191,8 @@ function newRunState(kind: "free" | "case", datasetId: string, request: string, 
     started_at: new Date().toISOString(),
     finished_at: null,
     duration_ms: null,
+    tag,
+    pinned: false,
   };
   runs.set(run.run_id, run);
   subscribers.set(run.run_id, new Set());
@@ -227,7 +237,7 @@ function finish(run: RunState, error: unknown = null): void {
 }
 
 function startCaseRun(config: AppConfig, spec: CaseSpec): RunState {
-  const run = newRunState("case", spec.dataset_id ?? "", spec.request ?? spec.title, spec.auto_execute ?? true, spec.id);
+  const run = newRunState("case", spec.dataset_id ?? "", spec.request ?? spec.title, spec.auto_execute ?? true, spec.id, `案例: ${spec.title}`);
   void (async () => {
     try {
       const result = await runCase(config, spec, makeSink(run));
@@ -248,18 +258,43 @@ function startCaseRun(config: AppConfig, spec: CaseSpec): RunState {
   return run;
 }
 
-function startFreeRun(config: AppConfig, datasetId: string, request: string, autoExecute: boolean): RunState {
-  const run = newRunState("free", datasetId, request, autoExecute, null);
+function getCustomTemplateFiles(config: AppConfig) {
+  const customFile = path.join(config.workDir, "custom_template.xlsx");
+  const metaFile = path.join(config.workDir, "custom_template.json");
+  return { customFile, metaFile };
+}
+
+function startFreeRun(
+  config: AppConfig,
+  datasetId: string,
+  request: string,
+  autoExecute: boolean,
+  mode: "prod" | "dev" = "prod",
+  userTag: string | null = null,
+): RunState {
+  const ds = config.datasets.get(datasetId);
+  const defaultTag = ds?.name ? ds.name.replace(/（.*）/, "").trim() : (mode === "dev" ? "开发调试" : "生产回填");
+  const run = newRunState("free", datasetId, request, autoExecute, null, userTag || defaultTag);
   void (async () => {
     let timer: NodeJS.Timeout | null = null;
     try {
+      const { customFile } = getCustomTemplateFiles(config);
+      const hasCustom = fs.existsSync(customFile);
+      const envUploaded = process.env.REPORT_TEMPLATE_DIR ? path.join(process.env.REPORT_TEMPLATE_DIR, "template.xlsx") : null;
+      const hasEnv = Boolean(envUploaded && fs.existsSync(envUploaded));
+
+      // 未上传自定义模板时要求上传
+      if (mode === "prod" && !hasCustom && !hasEnv) {
+        throw new Error("请先上传待回填的 Excel 模板文件 (.xlsx)");
+      }
+
       const dataset = resolveDataset(config, datasetId);
-      const template = path.join(config.mountRoots.get(dataset.mountRootId)!.resolvedRoot, "template.xlsx");
-      const uploaded = process.env.REPORT_TEMPLATE_DIR ? path.join(process.env.REPORT_TEMPLATE_DIR, "template.xlsx") : null;
+      const defaultTemplate = path.join(config.mountRoots.get(dataset.mountRootId)!.resolvedRoot, "template.xlsx");
+      const activeTemplate = (hasCustom ? customFile : null) ?? (hasEnv ? envUploaded! : defaultTemplate);
       const task = createTask(config, {
         requestText: request,
         datasetId,
-        templatePath: uploaded && fs.existsSync(uploaded) ? uploaded : template,
+        templatePath: activeTemplate,
       });
       run.task_id = task.task_id;
       run.artifact_dir = path.dirname(task.template_path);
@@ -355,7 +390,7 @@ const MIME: Record<string, string> = {
   ".map": "application/json; charset=utf-8",
 };
 
-function serveStatic(config: AppConfig, res: http.ServerResponse, urlPath: string): boolean {
+function serveStatic(config: AppConfig, res: http.ServerResponse, urlPath: string, method: string = "GET"): boolean {
   const dist = path.join(config.projectRoot, "web", "dist");
   if (!fs.existsSync(dist)) return false;
   const relative = urlPath.replace(/^\/+/, "");
@@ -363,7 +398,15 @@ function serveStatic(config: AppConfig, res: http.ServerResponse, urlPath: strin
   if (!file.startsWith(dist)) return false;
   if (!relative || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, "index.html");
   if (!fs.existsSync(file)) return false;
-  res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" });
+  const stat = fs.statSync(file);
+  res.writeHead(200, {
+    "content-type": MIME[path.extname(file)] ?? "application/octet-stream",
+    "content-length": stat.size,
+  });
+  if (method === "HEAD") {
+    res.end();
+    return true;
+  }
   fs.createReadStream(file).pipe(res);
   return true;
 }
@@ -376,6 +419,65 @@ function caseForRun(run: RunState, config: AppConfig): CaseSpec | null {
   } catch {
     return null;
   }
+}
+
+function runSummaries(config: AppConfig) {
+  return [...runs.values()]
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return Date.parse(b.started_at) - Date.parse(a.started_at);
+    })
+    .map((run) => {
+      const ds = config.datasets.get(run.dataset_id);
+      return {
+        run_id: run.run_id,
+        request: run.request,
+        case_title: caseForRun(run, config)?.title ?? null,
+        phase: run.phase,
+        started_at: run.started_at,
+        tag: run.tag ?? (ds?.name ? ds.name.replace(/（.*）/, "").trim() : "回填任务"),
+        pinned: Boolean(run.pinned),
+      };
+    });
+}
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!header) return cookies;
+  for (const pair of header.split(";")) {
+    const eq = pair.indexOf("=");
+    if (eq > 0) {
+      const key = pair.slice(0, eq).trim();
+      const val = pair.slice(eq + 1).trim();
+      try {
+        cookies[key] = decodeURIComponent(val);
+      } catch {
+        cookies[key] = val;
+      }
+    }
+  }
+  return cookies;
+}
+
+function verifyAuth(req: http.IncomingMessage, config: AppConfig, url: URL): boolean {
+  if (!config.authToken) return true;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    if (authHeader.slice(7).trim() === config.authToken) return true;
+  }
+
+  const xToken = req.headers["x-auth-token"];
+  if (typeof xToken === "string" && xToken.trim() === config.authToken) return true;
+
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies.report_auth_token === config.authToken) return true;
+
+  const queryToken = url.searchParams.get("token");
+  if (queryToken && queryToken === config.authToken) return true;
+
+  return false;
 }
 
 // --------------------------------------------------------------------------- //
@@ -399,7 +501,37 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         python: config.pythonBin,
         work_dir: config.workDir,
         has_credentials: Boolean(process.env.DEEPSEEK_API_KEY || process.env.REPORT_LLM_API_KEY),
+        dev_mode_allowed: config.devModeAllowed,
+        auth_required: Boolean(config.authToken),
+        authenticated: verifyAuth(req, config, url),
       });
+    }
+
+    // POST /api/auth/login
+    if (method === "POST" && parts[1] === "auth" && parts[2] === "login" && parts.length === 3) {
+      const body = await readJsonBody(req);
+      const token = String(body.token ?? body.password ?? "").trim();
+      if (!config.authToken || token === config.authToken) {
+        res.setHeader("Set-Cookie", `report_auth_token=${encodeURIComponent(config.authToken ?? "")}; Path=/; HttpOnly; SameSite=Lax`);
+        return sendJson(res, 200, { ok: true, message: "认证成功" });
+      }
+      return sendError(res, 401, "INVALID_TOKEN", "访问口令不正确");
+    }
+
+    // POST /api/auth/logout
+    if (method === "POST" && parts[1] === "auth" && parts[2] === "logout" && parts.length === 3) {
+      res.setHeader("Set-Cookie", "report_auth_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax");
+      return sendJson(res, 200, { ok: true, message: "已退出登录" });
+    }
+
+    // 鉴权守卫（全站保护）
+    if (!verifyAuth(req, config, url)) {
+      return sendError(res, 401, "UNAUTHORIZED", "需要访问口令，请先登录");
+    }
+
+    // 开发模式守卫：生产环境禁止访问测试案例库与测试用例运行
+    if (!config.devModeAllowed && (parts[1] === "cases" || (parts[1] === "runs" && parts[2] === "case"))) {
+      return sendError(res, 403, "DEV_MODE_DISABLED", "当前环境已关闭开发模式与测试案例");
     }
 
     // GET /api/datasets
@@ -412,16 +544,150 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
       return sendJson(res, 200, { cases: listCases(config) });
     }
 
+    // GET /api/template/info
+    if (method === "GET" && parts[1] === "template" && parts[2] === "info" && parts.length === 3) {
+      const clientMode = url.searchParams.get("mode") ?? (config.devModeAllowed ? "dev" : "prod");
+      const { customFile, metaFile } = getCustomTemplateFiles(config);
+      if (fs.existsSync(customFile)) {
+        let meta = { filename: "custom_template.xlsx", uploaded_at: "" };
+        try {
+          if (fs.existsSync(metaFile)) meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+        } catch {
+          /* 忽略 */
+        }
+        const stat = fs.statSync(customFile);
+        return sendJson(res, 200, {
+          has_template: true,
+          is_custom: true,
+          filename: meta.filename || "custom_template.xlsx",
+          size: stat.size,
+          updated_at: meta.uploaded_at || stat.mtime.toISOString(),
+        });
+      }
+
+      // 生产环境不提供默认模板
+      if (clientMode !== "dev") {
+        return sendJson(res, 200, {
+          has_template: false,
+          is_custom: false,
+          filename: null,
+          size: 0,
+          updated_at: null,
+        });
+      }
+
+      // 仅在开发模式下回退到演示模板方便测试
+      const reqDatasetId = url.searchParams.get("dataset_id");
+      let file: string | null = null;
+      if (reqDatasetId && config.datasets.has(reqDatasetId)) {
+        const ds = config.datasets.get(reqDatasetId)!;
+        const root = config.mountRoots.get(ds.mount_root_id);
+        if (root) {
+          const cand = path.join(root.resolvedRoot, "template.xlsx");
+          if (fs.existsSync(cand)) file = cand;
+        }
+      }
+      if (!file) {
+        const dev = config.mountRoots.get("dev");
+        file = dev ? path.join(dev.resolvedRoot, "template.xlsx") : null;
+      }
+      const stat = file && fs.existsSync(file) ? fs.statSync(file) : null;
+      return sendJson(res, 200, {
+        has_template: Boolean(stat),
+        is_custom: false,
+        filename: "template.xlsx",
+        size: stat?.size ?? 0,
+        updated_at: stat?.mtime.toISOString() ?? new Date().toISOString(),
+      });
+    }
+
+    // POST /api/template - 上传自定义 Excel 模板
+    if (method === "POST" && parts[1] === "template" && parts.length === 2) {
+      const body = await readJsonBody(req);
+      const filename = String(body.filename ?? "template.xlsx").trim();
+      const base64 = String(body.content_base64 ?? "");
+      if (!base64) {
+        return sendError(res, 400, "CONTENT_REQUIRED", "模板内容不能为空");
+      }
+      const buffer = Buffer.from(base64, "base64");
+      if (buffer.length < 50) {
+        return sendError(res, 400, "INVALID_FILE", "上传文件过小或无效");
+      }
+      const { customFile, metaFile } = getCustomTemplateFiles(config);
+      fs.mkdirSync(path.dirname(customFile), { recursive: true });
+      fs.writeFileSync(customFile, buffer);
+      fs.writeFileSync(
+        metaFile,
+        JSON.stringify(
+          {
+            filename,
+            uploaded_at: new Date().toISOString(),
+            size: buffer.length,
+          },
+          null,
+          2,
+        ),
+      );
+      return sendJson(res, 200, {
+        ok: true,
+        message: "模板上传成功",
+        filename,
+        size: buffer.length,
+      });
+    }
+
+    // DELETE /api/template - 重置为默认演示模板
+    if (method === "DELETE" && parts[1] === "template" && parts.length === 2) {
+      const { customFile, metaFile } = getCustomTemplateFiles(config);
+      if (fs.existsSync(customFile)) fs.unlinkSync(customFile);
+      if (fs.existsSync(metaFile)) fs.unlinkSync(metaFile);
+      return sendJson(res, 200, { ok: true, message: "已移除模板" });
+    }
+
     // GET /api/template
     if (method === "GET" && parts[1] === "template" && parts.length === 2) {
-      const dev = config.mountRoots.get("dev");
-      const file = dev ? path.join(dev.resolvedRoot, "template.xlsx") : null;
-      if (!file || !fs.existsSync(file)) return sendError(res, 404, "TEMPLATE_NOT_FOUND", "演示模板不存在");
+      const clientMode = url.searchParams.get("mode") ?? (config.devModeAllowed ? "dev" : "prod");
+      const { customFile, metaFile } = getCustomTemplateFiles(config);
+      let file: string | null = null;
+      let filename = "template.xlsx";
+      if (fs.existsSync(customFile)) {
+        file = customFile;
+        try {
+          if (fs.existsSync(metaFile)) {
+            const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+            if (meta.filename) filename = meta.filename;
+          }
+        } catch {
+          /* 忽略 */
+        }
+      } else if (clientMode === "dev") {
+        const reqDatasetId = url.searchParams.get("dataset_id");
+        if (reqDatasetId && config.datasets.has(reqDatasetId)) {
+          const ds = config.datasets.get(reqDatasetId)!;
+          const root = config.mountRoots.get(ds.mount_root_id);
+          if (root) {
+            const cand = path.join(root.resolvedRoot, "template.xlsx");
+            if (fs.existsSync(cand)) file = cand;
+          }
+        }
+        if (!file) {
+          const dev = config.mountRoots.get("dev");
+          file = dev ? path.join(dev.resolvedRoot, "template.xlsx") : null;
+        }
+      }
+      if (!file || !fs.existsSync(file)) {
+        return sendError(res, 404, "TEMPLATE_NOT_FOUND", "当前未上传模板，请先上传待回填的 Excel 模板");
+      }
       res.writeHead(200, {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "content-disposition": `attachment; filename="template.xlsx"`,
+        "content-disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
       });
       return void fs.createReadStream(file).pipe(res);
+    }
+
+    // GET /api/runs — 当前控制面进程里的历史运行摘要
+    if (method === "GET" && parts[1] === "runs" && parts.length === 2) {
+      return sendJson(res, 200, { runs: runSummaries(config) });
     }
 
     // POST /api/runs
@@ -429,12 +695,19 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
       const body = await readJsonBody(req);
       const request = String(body.request ?? "").trim();
       const datasetId = String(body.dataset_id ?? "");
+      const runMode = (body.mode === "dev" || body.mode === "prod") ? body.mode : (config.devModeAllowed ? "dev" : "prod");
       if (!request) return sendError(res, 400, "REQUEST_REQUIRED", "需求不能为空");
       if (!config.datasets.has(datasetId)) {
         return sendError(res, 400, "DATASET_UNKNOWN", `未知 dataset_id: ${datasetId}`);
       }
-      const run = startFreeRun(config, datasetId, request, body.auto_execute !== false);
-      return sendJson(res, 202, { run_id: run.run_id });
+      const { customFile } = getCustomTemplateFiles(config);
+      const envUploaded = process.env.REPORT_TEMPLATE_DIR ? path.join(process.env.REPORT_TEMPLATE_DIR, "template.xlsx") : null;
+      if (runMode === "prod" && !fs.existsSync(customFile) && (!envUploaded || !fs.existsSync(envUploaded))) {
+        return sendError(res, 400, "TEMPLATE_REQUIRED", "请先上传待回填的 Excel 模板文件 (.xlsx)");
+      }
+      const userTag = typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : null;
+      const run = startFreeRun(config, datasetId, request, body.auto_execute !== false, runMode, userTag);
+      return sendJson(res, 202, { run_id: run.run_id, tag: run.tag });
     }
 
     // POST /api/runs/case
@@ -448,13 +721,22 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         return sendError(res, 404, "CASE_NOT_FOUND", error instanceof Error ? error.message : String(error));
       }
       const run = startCaseRun(config, spec);
-      return sendJson(res, 202, { run_id: run.run_id, case_id: spec.id });
+      return sendJson(res, 202, { run_id: run.run_id, case_id: spec.id, tag: run.tag });
     }
 
     // /api/runs/:id...
     if (parts[1] === "runs" && parts[2]) {
       const run = runs.get(parts[2]);
       if (!run) return sendError(res, 404, "RUN_NOT_FOUND", `未知 run_id: ${parts[2]}`);
+
+      // PATCH /api/runs/:id - 更新会话标记或收藏
+      if (method === "PATCH" && parts.length === 3) {
+        const body = await readJsonBody(req);
+        if (typeof body.tag === "string") run.tag = body.tag.trim();
+        if (typeof body.pinned === "boolean") run.pinned = body.pinned;
+        emit(run.run_id, { type: "snapshot", run: publicRun(run) });
+        return sendJson(res, 200, { ok: true, run: publicRun(run) });
+      }
 
       if (method === "GET" && parts.length === 3) {
         const spec = caseForRun(run, config);
@@ -533,8 +815,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     return sendError(res, 404, "NOT_FOUND", `${method} ${url.pathname} 不存在`);
   }
 
-  if (method === "GET" && (parts.length === 0 || parts[0] !== "api")) {
-    if (serveStatic(config, res, url.pathname)) return;
+  if ((method === "GET" || method === "HEAD") && (parts.length === 0 || parts[0] !== "api")) {
+    if (serveStatic(config, res, url.pathname, method)) return;
   }
   sendError(res, 404, "NOT_FOUND", "资源不存在");
 }

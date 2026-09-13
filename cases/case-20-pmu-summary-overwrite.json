@@ -1,0 +1,60 @@
+{
+  "id": "case-20-pmu-summary-overwrite",
+  "title": "BMS 目标列覆盖电芯状态公式 → 必须阻断",
+  "description": "模拟错误规划：把开路电压误配置写入带有状态公式的 H 列（Cell_Status）。Write Safety Gate 必须立即检测到公式覆盖并拒绝执行，输出错误码 FORMULA_OVERWRITE。",
+  "kind": "deterministic",
+  "scenario": "validate-plan",
+  "dataset_id": "ds_pmu_power",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_pmu_test*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//channel_step",
+      "key_selector": "@code",
+      "field_storage": {
+        "item_selector": "./metric",
+        "field_name_selector": "@name",
+        "field_value_selector": "@val"
+      }
+    },
+    "template": {
+      "sheet_scope": [
+        "Cell_Matrix"
+      ],
+      "join": {
+        "template_key_column": "C",
+        "source_key": "channel_step.@code",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "v_ocv",
+          "target_column": "H"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": false,
+    "gates": "not_all_pass",
+    "error_codes": [
+      "FORMULA_OVERWRITE"
+    ]
+  }
+}

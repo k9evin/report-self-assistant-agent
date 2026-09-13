@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "fixture": "python3 tests/make_fixture.py ${FIXTURE_DIR:-/tmp/report-fixture}",
+    "fixture:complex": "python3 tests/make_complex_fixtures.py",
     "regress": "bash tests/regress.sh ${FIXTURE_DIR:-/tmp/report-fixture}",
     "test:node": "tsx --test tests/node/*.test.ts",
     "test": "npm run regress && npm run test:node",
@@ -18,9 +19,13 @@
     "ask": "tsx src/cli.ts ask",
     "smoke": "tsx src/smoke.ts",
     "serve": "tsx src/server.ts",
+    "serve:dev": "tsx watch src/server.ts",
     "cases": "tsx src/run-cases.ts",
+    "cases:deterministic": "tsx src/run-cases.ts --deterministic",
+    "cases:mock": "REPORT_PLANNER=mock tsx src/run-cases.ts",
     "web:install": "npm --prefix web install",
     "web:build": "npm --prefix web run build",
+    "web:dev": "npm --prefix web run dev",
     "sync:penguin": "bash scripts/sync-to-penguin-agent.sh"
   },
   "dependencies": {

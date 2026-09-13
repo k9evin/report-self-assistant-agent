@@ -11,6 +11,7 @@ import {
   extractRun,
   runStreamUrl,
 } from "./api";
+import type { AppMode } from "./mode";
 import type { Check, RunView, ToolCall } from "./types";
 
 /** 一轮对话：首次运行是需求，之后每次追问各算一轮。 */
@@ -115,8 +116,12 @@ function mergeChecks(checks: Check[], incoming: Check[]): Check[] {
 function applySnapshot(state: RunStreamState, run: RunView): RunStreamState {
   const incomingTools = run.tool_calls ?? [];
   const incomingChecks = run.checks ?? [];
+  const turns = state.turns.length > 0 || !run.request
+    ? state.turns
+    : [{ prompt: run.request, replyBase: 0, toolsBase: 0, datasetId: run.dataset_id ?? null, autoExecute: true, at: run.started_at ?? new Date().toISOString() }];
   return {
     ...state,
+    turns,
     run,
     phase: run.phase ?? state.phase,
     // 快照里是服务端累积的权威列表：不比本地少就整体替换，否则只补齐本地缺的条目。
@@ -136,9 +141,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface RunStreamApi {
   state: RunStreamState;
-  startRun: (input: { request: string; dataset_id: string | null; auto_execute: boolean }) => Promise<void>;
-  startCase: (caseId: string) => Promise<void>;
+  startRun: (input: { request: string; dataset_id: string | null; auto_execute: boolean; mode?: AppMode; tag?: string }) => Promise<string | null>;
+  startCase: (caseId: string) => Promise<string | null>;
   ask: (message: string) => Promise<void>;
+  loadRun: (runId: string) => void;
   reset: () => void;
 }
 
@@ -284,7 +290,7 @@ export function useRunStream(): RunStreamApi {
     async (
       create: () => Promise<{ run_id: string }>,
       turn: { prompt: string; datasetId: string | null; autoExecute: boolean },
-    ) => {
+    ): Promise<string | null> => {
       closeStream();
       setState({
         ...INITIAL,
@@ -299,16 +305,17 @@ export function useRunStream(): RunStreamApi {
         if (typeof runId !== "string" || !runId) throw new Error("后端没有返回 run_id");
       } catch (cause) {
         update((previous) => ({ ...previous, busy: false, error: errorMessage(cause) }));
-        return;
+        return null;
       }
       update((previous) => ({ ...previous, runId }));
       openStream(runId);
+      return runId;
     },
     [closeStream, openStream, update],
   );
 
   const startRun = useCallback(
-    (input: { request: string; dataset_id: string | null; auto_execute: boolean }) =>
+    (input: { request: string; dataset_id: string | null; auto_execute: boolean; mode?: AppMode; tag?: string }) =>
       start(() => createRun(input), {
         prompt: input.request,
         datasetId: input.dataset_id,
@@ -357,10 +364,19 @@ export function useRunStream(): RunStreamApi {
     [closeStream, openStream, state.runId, update],
   );
 
+  const loadRun = useCallback(
+    (runId: string) => {
+      closeStream();
+      setState({ ...INITIAL, runId, started: true, busy: true, turns: [] });
+      openStream(runId);
+    },
+    [closeStream, openStream],
+  );
+
   const reset = useCallback(() => {
     closeStream();
     setState(INITIAL);
   }, [closeStream]);
 
-  return { state, startRun, startCase, ask, reset };
+  return { state, startRun, startCase, ask, loadRun, reset };
 }

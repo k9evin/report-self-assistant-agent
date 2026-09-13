@@ -57,7 +57,22 @@ export interface PlannerService {
   buildIntentPlan(taskId: string): Promise<Record<string, unknown>>;
   buildResolvedPlan(taskId: string): Promise<PlanResult>;
   replanFromErrors(taskId: string, errors: unknown[]): Promise<PlanResult>;
-  runTask(taskId: string, options?: { autoExecute?: boolean }): Promise<TaskOutcome>;
+  runTask(
+    taskId: string,
+    options?: {
+      autoExecute?: boolean;
+      onEvent?: (event: ToolCallTrace) => void;
+      onText?: (delta: string) => void;
+    },
+  ): Promise<TaskOutcome>;
+  ask(
+    taskId: string,
+    message: string,
+    options?: {
+      onEvent?: (event: ToolCallTrace) => void;
+      onText?: (delta: string) => void;
+    },
+  ): Promise<TaskOutcome>;
 }
 
 interface PiEvent {
@@ -376,6 +391,168 @@ export class PiPlanner implements PlannerService {
   }
 }
 
-export function createPlanner(config?: AppConfig): PiPlanner {
-  return new PiPlanner(config ?? loadConfig());
+function findGoldenPlan(config: AppConfig, datasetId: string): ResolvedPlan | null {
+  const casesPath = path.join(config.projectRoot, "cases");
+  if (!fs.existsSync(casesPath)) return null;
+  const files = fs.readdirSync(casesPath).filter((f) => f.endsWith(".json"));
+  for (const f of files) {
+    try {
+      const spec = JSON.parse(fs.readFileSync(path.join(casesPath, f), "utf8")) as {
+        kind?: string;
+        dataset_id?: string;
+        plan?: ResolvedPlan;
+        expect?: { execution_allowed?: boolean };
+      };
+      if (spec.kind === "deterministic" && spec.dataset_id === datasetId && spec.plan && spec.expect?.execution_allowed === true) {
+        return spec.plan;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export class MockPlanner implements PlannerService {
+  constructor(private readonly config: AppConfig = loadConfig()) {}
+
+  private readArtifacts(taskId: string) {
+    const task = loadTask(this.config, taskId);
+    const workspaceDir = path.dirname(task.template_path);
+    const readJson = <T>(file: string): T | null => {
+      const full = path.join(workspaceDir, file);
+      if (!fs.existsSync(full)) return null;
+      try {
+        return JSON.parse(fs.readFileSync(full, "utf8")) as T;
+      } catch {
+        return null;
+      }
+    };
+    const outputsDir = path.join(workspaceDir, "outputs");
+    return {
+      task,
+      plan: readJson<ResolvedPlan>("plan.json"),
+      validation: readJson<ValidatedPlan>("validation.json"),
+      outputFiles: fs.existsSync(outputsDir) ? fs.readdirSync(outputsDir).sort() : [],
+    };
+  }
+
+  async runTask(
+    taskId: string,
+    options: { autoExecute?: boolean; onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
+  ): Promise<TaskOutcome> {
+    const started = Date.now();
+    const task = loadTask(this.config, taskId);
+    const autoExecute = options.autoExecute ?? true;
+    const workspaceDir = path.dirname(task.template_path);
+    const toolDefs = createReportTools({ config: this.config, taskId, workspaceDir });
+    const tools = new Map(toolDefs.map((t) => [t.name, t]));
+    const toolCalls: ToolCallTrace[] = [];
+
+    const callTool = async (name: string, params: Record<string, unknown> = {}) => {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`未知工具: ${name}`);
+      const startTrace: ToolCallTrace = { name, ok: true, at: new Date().toISOString(), phase: "start" };
+      toolCalls.push(startTrace);
+      options.onEvent?.(startTrace);
+      appendEvent(this.config, taskId, { type: "agent.tool_start", tool: name });
+
+      let ok = true;
+      try {
+        const result = await (tool.execute as Function)(name + "-call", params);
+        if ((result as any)?.details?.error) ok = false;
+        return result;
+      } catch (err) {
+        ok = false;
+        throw err;
+      } finally {
+        startTrace.ok = ok;
+        appendEvent(this.config, taskId, { type: "agent.tool_end", tool: name, ok });
+        options.onEvent?.({ name, ok, at: new Date().toISOString(), phase: "end" });
+      }
+    };
+
+    await callTool("inspect_template", {});
+    await callTool("inspect_xml_schema", {});
+
+    const plan = findGoldenPlan(this.config, task.dataset_id);
+    if (!plan) throw new Error(`MockPlanner 未能找到数据集 ${task.dataset_id} 的 Golden Plan`);
+    await callTool("submit_resolved_plan", { plan });
+    await callTool("validate_report_plan", {});
+
+    if (autoExecute) {
+      const curTask = loadTask(this.config, taskId);
+      if (curTask.plan_sha256) {
+        await callTool("execute_validated_plan", { plan_sha256: curTask.plan_sha256 });
+      }
+      await callTool("get_task_status", {});
+    }
+
+    const reply = autoExecute
+      ? `已完成 ${task.dataset_id} 的数据源与模板探测，自动生成规划并通过 Dry-Run 校验，成功完成数据回填。`
+      : `已完成 ${task.dataset_id} 的数据源与模板探测，自动生成规划并通过 Dry-Run 校验（未执行回填）。`;
+    options.onText?.(reply);
+
+    const { task: finalTask, plan: finalPlan, validation, outputFiles } = this.readArtifacts(taskId);
+    return {
+      task_id: taskId,
+      status: finalTask.status,
+      plan_sha256: finalTask.plan_sha256 ?? null,
+      plan: finalPlan,
+      validation,
+      outputs: finalTask.outputs ?? null,
+      output_files: outputFiles,
+      reply,
+      tool_calls: toolCalls,
+      duration_ms: Date.now() - started,
+    };
+  }
+
+  async ask(
+    taskId: string,
+    message: string,
+    options: { onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
+  ): Promise<TaskOutcome> {
+    const started = Date.now();
+    const task = loadTask(this.config, taskId);
+    appendEvent(this.config, taskId, { type: "agent.ask", message });
+    const reply = `收到追问：“${message}”。MockPlanner 已确认当前状态就绪。`;
+    options.onText?.(reply);
+    const { task: finalTask, plan: finalPlan, validation, outputFiles } = this.readArtifacts(taskId);
+    return {
+      task_id: taskId,
+      status: finalTask.status,
+      plan_sha256: finalTask.plan_sha256 ?? null,
+      plan: finalPlan,
+      validation,
+      outputs: finalTask.outputs ?? null,
+      output_files: outputFiles,
+      reply,
+      tool_calls: [],
+      duration_ms: Date.now() - started,
+    };
+  }
+
+  async buildIntentPlan(taskId: string): Promise<Record<string, unknown>> {
+    return { mode: "mock", taskId };
+  }
+
+  async buildResolvedPlan(taskId: string): Promise<PlanResult> {
+    const task = loadTask(this.config, taskId);
+    const plan = findGoldenPlan(this.config, task.dataset_id);
+    if (!plan) throw new Error("未能得到 ResolvedPlan");
+    return { plan_sha256: "mock-sha256", plan };
+  }
+
+  async replanFromErrors(taskId: string): Promise<PlanResult> {
+    return this.buildResolvedPlan(taskId);
+  }
+}
+
+export function createPlanner(config?: AppConfig): PlannerService {
+  const cfg = config ?? loadConfig();
+  if (cfg.provider === "mock" || process.env.REPORT_PLANNER === "mock") {
+    return new MockPlanner(cfg);
+  }
+  return new PiPlanner(cfg);
 }

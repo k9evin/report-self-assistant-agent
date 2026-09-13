@@ -3,7 +3,7 @@
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL_SHA_BEFORE="$(shasum -a 256 /dev/null | cut -d" " -f1)"
-T=/Users/mingkaip/.penguin/data/default_project/agents/report_assistant/agent_state/tools/report_tools.py
+T="${HERE}/../tools/report_tools.py"
 FIX=${1:-/tmp/report-fixture-regress}
 rm -rf "$FIX" 2>/dev/null
 python3 "$HERE/make_fixture.py" "$FIX" >/dev/null || exit 1

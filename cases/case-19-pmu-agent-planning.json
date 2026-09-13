@@ -1,0 +1,25 @@
+{
+  "id": "case-19-pmu-agent-planning",
+  "title": "BMS 32 通道电池矩阵回填（模型自主规划 + Key 在 C 列 + 跨行汇总隔离）",
+  "description": "真实模型端到端用例：32 通道电池包标定。模型需自主探测出 Channel_Code 位于 C 列（而非固定 P 列），通过 inspect_xml 识别 sequence/channel_step/metric 结构，目标列写入 D~G，并在第 38~41 行跨行统计公式前精准停止，保证底部压差与平均电压计算不受损。",
+  "kind": "agent",
+  "dataset_id": "ds_pmu_power",
+  "auto_execute": true,
+  "request": "这是 BMS 32 串电芯电压与交流内阻标定报告回填任务。\n模板包含 Cell_Matrix 和 Pack_Summary 两个表，只需回填 Cell_Matrix 表。\n在 Cell_Matrix 表中，C 列保存了电芯通道代码（CELL_CH_01 到 CELL_CH_32），根据 C 列匹配 XML 中 channel_step 节点的 code 属性。\n从每个 channel_step 节点的 metric 中提取 v_ocv、r_int、i_leak、temp_rise 四项指标，分别写入同一行的 D、E、F、G 列。\n注意：表下方第 38 行开始是全包平均电压、最大压差和最大内阻的统计公式区，严禁改写；每个 SN 生成一个独立的 Excel 文件。",
+  "expect": {
+    "status": [
+      "COMPLETED",
+      "COMPLETED_WITH_WARNINGS"
+    ],
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 4,
+    "tool_calls": [
+      "inspect_xml_schema",
+      "submit_resolved_plan",
+      "validate_report_plan",
+      "execute_validated_plan"
+    ]
+  }
+}

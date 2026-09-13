@@ -29,6 +29,18 @@
       "linux": "/tmp/report-big-multifile",
       "macos": "/tmp/report-big-multifile",
       "credential_ref": null
+    },
+    "rf": {
+      "unc": null,
+      "linux": "/tmp/report-rf",
+      "macos": "/tmp/report-rf",
+      "credential_ref": null
+    },
+    "pmu": {
+      "unc": null,
+      "linux": "/tmp/report-pmu",
+      "macos": "/tmp/report-pmu",
+      "credential_ref": null
     }
   },
   "datasets": [
@@ -78,6 +90,26 @@
       "mount_root_id": "bigmulti",
       "unc_path": null,
       "relative_path": "TD28",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    },
+    {
+      "dataset_id": "ds_rf_calibration",
+      "name": "5G 射频发射校准测试（多 Sheet 复杂模板 + 元素度量 XML + 行级公式保护）",
+      "mount_root_id": "rf",
+      "unc_path": null,
+      "relative_path": "TD5G",
+      "access": "read_only",
+      "allowed_users": [],
+      "credential_ref": null
+    },
+    {
+      "dataset_id": "ds_pmu_power",
+      "name": "BMS 电池管理通道校准（32通道电芯矩阵 + 底部跨行统计区 + 压差计算）",
+      "mount_root_id": "pmu",
+      "unc_path": null,
+      "relative_path": "TDBMS",
       "access": "read_only",
       "allowed_users": [],
       "credential_ref": null

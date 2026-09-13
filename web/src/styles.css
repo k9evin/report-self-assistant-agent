@@ -1,5 +1,5 @@
-/* 视觉规范来自 skill web-design：GitHub 式简洁、1px 边框、系统字体、单一蓝色点缀。
-   组件层用 shadcn/ui（Tailwind v4），与仓库自带的 CSS 共用下面同一套设计令牌。 */
+/* 视觉规范：工业级简洁、1px 精致边框、系统与现代字体、聚焦单一高质感蓝色点缀。
+   组件层用 shadcn/ui（Tailwind v4），与仓库自带的 CSS 共用同一套设计令牌。 */
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -9,84 +9,85 @@
 
 :root {
   color-scheme: light;
-  --brand-50: #e8f0fe;
-  --brand-100: #d2e3fc;
-  --brand-300: #8ab4f8;
-  --brand-500: #4285f4;
-  --brand-600: #1a73e8;
-  --brand-700: #0b57d0;
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-300: #93c5fd;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
 
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-900: #111827;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-900: #0f172a;
 
-  --bg: #ffffff;
+  --bg: #fafafa;
   --surface: #ffffff;
-  --border: var(--gray-200);
-  --control-border: var(--gray-300);
-  --fg: var(--gray-900);
-  --fg-muted: var(--gray-600);
-  --fg-faint: var(--gray-500);
-  --accent-bg: #111827;
+  --border: #e2e8f0;
+  --control-border: #cbd5e1;
+  --fg: #0f172a;
+  --fg-muted: #475569;
+  --fg-faint: #64748b;
+  --accent-bg: #0f172a;
   --accent-fg: #ffffff;
 
-  --ok-bg: #f0fdf4;
-  --ok-fg: #15803d;
-  --ok-border: #bbf7d0;
+  --ok-bg: #ecfdf5;
+  --ok-fg: #059669;
+  --ok-border: #a7f3d0;
   --warn-bg: #fffbeb;
-  --warn-fg: #b45309;
+  --warn-fg: #d97706;
   --warn-border: #fde68a;
   --bad-bg: #fef2f2;
-  --bad-fg: #b91c1c;
+  --bad-fg: #dc2626;
   --bad-border: #fecaca;
 
-  --radius-control: 6px;
+  --radius-control: 8px;
   --radius-card: 12px;
-  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* UI 层的语义色（shadcn 组件与对话界面用；深色下单独取值，不改动上面的灰阶） */
-  --ui-secondary: var(--gray-100);
-  --ui-subtle: var(--gray-50);
-  --ui-hover: var(--gray-100);
-  --ui-ring: var(--gray-400);
+  /* UI 层的语义色（shadcn 组件与对话界面用） */
+  --ui-secondary: #f1f5f9;
+  --ui-subtle: #f8fafc;
+  --ui-hover: #f1f5f9;
+  --ui-ring: #94a3b8;
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #000000;
-  --surface: #0d0d0d;
-  --border: #1f1f1f;
-  --control-border: #303030;
-  --fg: #f3f4f6;
-  --fg-muted: #9ca3af;
-  --fg-faint: #6b7280;
-  --accent-bg: #f3f4f6;
-  --accent-fg: #111827;
-  --brand-600: #8ab4f8;
-  --brand-700: #8ab4f8;
+  --bg: #09090b;
+  --surface: #121215;
+  --border: #27272a;
+  --control-border: #3f3f46;
+  --fg: #f4f4f5;
+  --fg-muted: #a1a1aa;
+  --fg-faint: #71717a;
+  --accent-bg: #f4f4f5;
+  --accent-fg: #09090b;
+  --brand-600: #60a5fa;
+  --brand-700: #3b82f6;
 
-  --ok-bg: #052e16;
-  --ok-fg: #4ade80;
-  --ok-border: #14532d;
-  --warn-bg: #451a03;
+  --ok-bg: #062817;
+  --ok-fg: #34d399;
+  --ok-border: #065f46;
+  --warn-bg: #321903;
   --warn-fg: #fbbf24;
   --warn-border: #78350f;
-  --bad-bg: #450a0a;
+  --bad-bg: #350c0c;
   --bad-fg: #f87171;
   --bad-border: #7f1d1d;
 
-  --ui-secondary: #1f1f1f;
-  --ui-subtle: #141414;
-  --ui-hover: #1f1f1f;
-  --ui-ring: #4b5563;
+  --ui-secondary: #18181b;
+  --ui-subtle: #121215;
+  --ui-hover: #1f1f23;
+  --ui-ring: #52525b;
 }
 
-/* ---------- shadcn 变量 → 设计令牌（两套样式共用同一套颜色与圆角） ---------- */
+/* ---------- shadcn 变量 → 设计令牌 ---------- */
 
 @theme inline {
   --color-background: var(--bg);
@@ -134,17 +135,19 @@ body {
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
-    "Microsoft YaHei", sans-serif;
+  font-family: "Plus Jakarta Sans", "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 code,
 pre,
 kbd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 code {
@@ -157,14 +160,14 @@ h3,
 h4 {
   margin: 0;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
 }
 
 h1 {
-  font-size: 30px;
+  font-size: 28px;
 }
 h2 {
-  font-size: 24px;
+  font-size: 22px;
 }
 h3 {
   font-size: 16px;
@@ -187,6 +190,7 @@ ol {
 a {
   color: var(--brand-700);
   text-decoration: none;
+  transition: color 120ms ease;
 }
 
 a:hover {
@@ -194,15 +198,29 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 3px solid rgb(107 114 128 / 0.4);
+  outline: 2px solid var(--brand-600);
   outline-offset: 2px;
+}
+
+/* 优雅滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-faint);
 }
 }
 
 @layer components {
-/* ---------- 外壳 ----------
-   界面主体（运行任务 / 测试案例 / 结果区）已迁到 shadcn 组件 + Tailwind utilities，
-   这一层只剩导航与页面骨架这些没有对应组件、且靠类名表达的规则。 */
+/* ---------- 外壳 ---------- */
 
 .app {
   min-height: 100vh;
@@ -213,15 +231,15 @@ a:hover {
 .nav {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   height: 56px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .nav-inner {
-  max-width: 1100px;
+  max-width: 1200px;
   height: 100%;
   margin: 0 auto;
   padding: 0 20px;
@@ -233,30 +251,32 @@ a:hover {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .brand-mark {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex: none;
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--gray-50);
-  color: var(--fg);
+  background: var(--surface);
+  color: var(--brand-600);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .dark .brand-mark {
-  background: #141414;
+  background: #18181b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .brand-name {
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,6 +285,7 @@ a:hover {
 .tabs {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -275,48 +296,49 @@ a:hover {
   color: var(--fg-muted);
   font: inherit;
   font-size: 14px;
-  min-height: 40px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 14px;
   border-radius: var(--radius-control);
   cursor: pointer;
-  transition: color 150ms var(--ease), background-color 150ms var(--ease),
-    border-color 150ms var(--ease);
+  transition: all 150ms var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tab:hover {
-  background: var(--gray-100);
+  background: var(--ui-hover);
   color: var(--fg);
-}
-
-.dark .tab:hover {
-  background: #1f1f1f;
 }
 
 .tab-active {
-  background: var(--gray-100);
+  background: var(--surface);
+  border-color: var(--border);
   color: var(--fg);
   font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .dark .tab-active {
-  background: #1f1f1f;
+  background: #18181b;
+  border-color: var(--border);
 }
 
 .main {
   flex: 1;
-  padding: 24px 0 48px;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .main-inner {
   max-width: 1100px;
+  width: 100%;
   margin: 0 auto;
   padding: 0 20px;
-}
-
-.foot {
-  margin-top: 32px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .caption {
@@ -324,15 +346,15 @@ a:hover {
   color: var(--fg-faint);
 }
 
-/* ---------- 控件（只剩导航里的主题切换按钮） ---------- */
+/* ---------- 控件 ---------- */
 
 .btn {
   appearance: none;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  min-height: 40px;
-  padding: 6px 12px;
+  height: 36px;
+  padding: 6px 14px;
   border-radius: var(--radius-control);
   border: 1px solid transparent;
   cursor: pointer;
@@ -340,8 +362,11 @@ a:hover {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: color 150ms var(--ease), background-color 150ms var(--ease),
-    border-color 150ms var(--ease), opacity 150ms var(--ease);
+  transition: all 140ms var(--ease);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn-secondary {
@@ -351,16 +376,12 @@ a:hover {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--gray-100);
-}
-
-.dark .btn-secondary:hover:not(:disabled) {
-  background: #1f1f1f;
+  background: var(--ui-hover);
 }
 
 .btn-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   flex: none;
 }
@@ -375,11 +396,94 @@ kbd {
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 11px;
+  background: var(--ui-subtle);
+  color: var(--fg-muted);
 }
 
-/* ---------- 响应式 ---------- */
+/* ---------- 工作区侧栏 ---------- */
+
+.workspace-shell {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - 56px);
+  position: relative;
+}
+
+.history-sidebar {
+  position: sticky;
+  top: 56px;
+  display: flex;
+  flex: 0 0 268px;
+  flex-direction: column;
+  align-self: flex-start;
+  height: calc(100vh - 56px);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  transition: width 200ms var(--ease), flex-basis 200ms var(--ease);
+  overflow: hidden;
+}
+
+.history-sidebar.collapsed {
+  flex: 0 0 0px;
+  width: 0px;
+  border-right: 0;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 16px 12px;
+}
+.history-kicker { color: var(--fg-faint); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.history-title { margin-top: 1px; font-size: 15px; }
+.history-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 4px; overflow-y: auto; padding: 0 8px 12px; }
+.history-item { 
+  display: flex; 
+  width: 100%; 
+  gap: 10px; 
+  border: 1px solid transparent; 
+  border-radius: var(--radius-control); 
+  background: transparent; 
+  padding: 8px 10px; 
+  text-align: left; 
+  color: var(--fg); 
+  cursor: pointer; 
+  transition: all 120ms var(--ease);
+}
+.history-item:hover { background: var(--ui-hover); }
+.history-item:active { transform: scale(0.99); }
+.history-item-active { 
+  border-color: color-mix(in srgb, var(--brand-600) 25%, var(--border)); 
+  background: color-mix(in srgb, var(--brand-600) 7%, var(--surface)); 
+}
+.history-dot { width: 7px; height: 7px; margin-top: 5px; flex: none; border-radius: 999px; background: var(--fg-faint); }
+.history-dot-success { background: var(--ok-fg); } 
+.history-dot-danger { background: var(--bad-fg); } 
+.history-dot-warning { background: var(--warn-fg); } 
+.history-dot-neutral { background: var(--fg-faint); }
+
+.history-item-body { min-width: 0; flex: 1; }
+.history-item-title { display: block; overflow: hidden; font-size: 13px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.history-item-meta { display: flex; gap: 5px; margin-top: 2px; color: var(--fg-faint); font-size: 11px; }
+.history-empty { padding: 32px 14px; color: var(--fg-muted); font-size: 12px; line-height: 1.7; text-align: center; }
+.history-empty span { color: var(--fg-faint); }
+.history-foot { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding: 12px 16px; color: var(--fg-faint); font-size: 11px; }
+.workspace-shell > .main { min-width: 0; flex: 1; }
+
+@media (max-width: 760px) {
+  .history-sidebar { flex-basis: 220px; }
+  .history-head { padding-left: 12px; padding-right: 12px; }
+}
 
 @media (max-width: 640px) {
+  .workspace-shell { display: block; }
+  .history-sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .history-head { padding: 14px; }
+  .history-list { max-height: 140px; padding: 0 8px 8px; }
+  .history-foot { display: none; }
+
   .nav-inner {
     padding: 0 14px;
     gap: 8px;

@@ -7,6 +7,18 @@ export interface ApiErrorBody {
   error: { code: string; message: string };
 }
 
+export interface HealthResponse {
+  ok: boolean;
+  version: string;
+  provider: string;
+  model_id: string;
+  work_dir: string;
+  has_credentials: boolean;
+  dev_mode_allowed?: boolean;
+  auth_required?: boolean;
+  authenticated?: boolean;
+}
+
 export interface DatasetProblem {
   code: string;
   message: string;
@@ -86,6 +98,20 @@ export interface RunOutputs {
   failed?: number;
 }
 
+export interface RunSummary {
+  run_id: string;
+  request: string;
+  case_title?: string | null;
+  phase?: string;
+  started_at: string;
+  tag?: string | null;
+  pinned?: boolean;
+}
+
+export interface RunsResponse {
+  runs: RunSummary[];
+}
+
 export interface Check {
   name: string;
   ok: boolean;
@@ -117,6 +143,8 @@ export interface RunView {
   started_at?: string;
   finished_at?: string | null;
   duration_ms?: number | null;
+  tag?: string | null;
+  pinned?: boolean;
 }
 
 /** SSE 载荷：契约里的 type 联合。快照/结束同时兼容内联 RunView 的写法。 */
@@ -170,8 +198,25 @@ export type StreamEvent =
 
 export interface RunCreatedResponse {
   run_id: string;
+  tag?: string;
 }
 
 export interface OkResponse {
   ok: boolean;
+  message?: string;
+}
+
+export interface TemplateInfo {
+  has_template: boolean;
+  is_custom: boolean;
+  filename: string | null;
+  size: number;
+  updated_at: string | null;
+}
+
+export interface TemplateUploadResponse {
+  ok: boolean;
+  message?: string;
+  filename: string;
+  size: number;
 }

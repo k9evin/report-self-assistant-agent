@@ -1,0 +1,71 @@
+{
+  "id": "case-17-pmu-channel-backfill",
+  "title": "BMS 32 通道电池矩阵回填（Key 在 C 列 + 保护底部跨行统计区）",
+  "description": "复杂 BMS 电池包测试：32 个采样通道，Key 列位于 C 列，写入目标列 D~G。模板第 38~41 行为平均电压、最大压差 (mV)、最大内阻等跨行统计公式。验证回填只填充数据行，严禁越界修改下方统计区。",
+  "kind": "deterministic",
+  "scenario": "validate-and-execute",
+  "dataset_id": "ds_pmu_power",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_pmu_test*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//channel_step",
+      "key_selector": "@code",
+      "field_storage": {
+        "item_selector": "./metric",
+        "field_name_selector": "@name",
+        "field_value_selector": "@val"
+      }
+    },
+    "template": {
+      "sheet_scope": [
+        "Cell_Matrix"
+      ],
+      "join": {
+        "template_key_column": "C",
+        "source_key": "channel_step.@code",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "v_ocv",
+          "target_column": "D"
+        },
+        {
+          "source_field": "r_int",
+          "target_column": "E"
+        },
+        {
+          "source_field": "i_leak",
+          "target_column": "F"
+        },
+        {
+          "source_field": "temp_rise",
+          "target_column": "G"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 4
+  }
+}

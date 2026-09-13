@@ -1,0 +1,71 @@
+{
+  "id": "case-15-rf-calibration",
+  "title": "5G 射频校准回填（多 Sheet 模板 + Key 在 B 列 + 行级判定公式保护）",
+  "description": "复杂工业射频场景：3 个 Sheet 的模板中只回填 RF_Tx_Cal；Key 列位于 B 列（而非固定 P 列）；D~G 为回填目标列；H 列有行级合格判定公式（Write Safety 必须保护不被改写）；Summary 表有跨 Sheet 统计公式。验证提取与公式完整保留。",
+  "kind": "deterministic",
+  "scenario": "validate-and-execute",
+  "dataset_id": "ds_rf_calibration",
+  "plan": {
+    "plan_version": 2,
+    "output": {
+      "mode": "one_file_per_sn",
+      "sn_source": "parent_directory_name",
+      "filename_pattern": "{sn}_FIR.xlsx"
+    },
+    "source_file": {
+      "pattern": "*_rf_cal*.xml",
+      "multiple_match_policy": "latest_mtime"
+    },
+    "source_records": {
+      "record_selector": ".//point",
+      "key_selector": "@id",
+      "field_storage": {
+        "item_selector": "./measure",
+        "field_name_selector": "@metric",
+        "field_value_selector": "@val"
+      }
+    },
+    "template": {
+      "sheet_scope": [
+        "RF_Tx_Cal"
+      ],
+      "join": {
+        "template_key_column": "B",
+        "source_key": "point.@id",
+        "match_mode": "normalized_exact"
+      },
+      "mappings": [
+        {
+          "source_field": "tx_pwr",
+          "target_column": "D"
+        },
+        {
+          "source_field": "evm",
+          "target_column": "E"
+        },
+        {
+          "source_field": "ber",
+          "target_column": "F"
+        },
+        {
+          "source_field": "aclr",
+          "target_column": "G"
+        }
+      ]
+    },
+    "normalization": {
+      "trim_whitespace": true,
+      "case_sensitive": true,
+      "rules": []
+    },
+    "missing_value_policy": "leave_blank_and_report",
+    "missing_case_policy": "warning",
+    "duplicate_source_key_policy": "block"
+  },
+  "expect": {
+    "execution_allowed": true,
+    "gates": "all_pass",
+    "error_codes": [],
+    "output_xlsx": 4
+  }
+}

@@ -866,7 +866,14 @@ export async function runCase(config: AppConfig, spec: CaseSpec, emit: Emit = ()
 /** 命令行入口：`npm run cases [用例 id …]`。 */
 export async function runCasesByIds(ids: string[], options: { quiet?: boolean } = {}): Promise<boolean> {
   const config = loadConfig();
-  const specs = ids.length > 0 ? ids.map((id) => getCase(id, config)) : listCases(config);
+  let filterKind: CaseKind | null = null;
+  const filteredIds = ids.filter((id) => {
+    if (id === "--deterministic") { filterKind = "deterministic"; return false; }
+    if (id === "--agent") { filterKind = "agent"; return false; }
+    return true;
+  });
+  let specs = filteredIds.length > 0 ? filteredIds.map((id) => getCase(id, config)) : listCases(config);
+  if (filterKind) specs = specs.filter((item) => item.kind === filterKind);
   if (specs.length === 0) {
     console.error(`没有用例：${casesDir(config)} 是空的`);
     return false;
