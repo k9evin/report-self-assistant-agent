@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isSupportedSelector, validateResolvedPlanShape, type ResolvedPlan } from "../../src/schemas.ts";
+import { coercePlanObject, isSupportedSelector, validateResolvedPlanShape, type ResolvedPlan } from "../../src/schemas.ts";
 
 function validPlan(): ResolvedPlan {
   return {
@@ -60,3 +60,40 @@ test("selector 子集与 Python 层一致", () => {
     assert.equal(isSupportedSelector(selector), false, JSON.stringify(selector));
   }
 });
+
+test("小模型生成的 JSON 字符串 plan 自动解析与校验通过", () => {
+  const plan = validPlan();
+  const jsonStr = JSON.stringify(plan);
+  // 1. 直接传 JSON 字符串
+  assert.deepEqual(validateResolvedPlanShape(jsonStr), []);
+  // 2. 包装在 Markdown 代码块内
+  const mdStr = `\`\`\`json\n${jsonStr}\n\`\`\``;
+  assert.deepEqual(validateResolvedPlanShape(mdStr), []);
+  // 3. 包装在 { plan: "..." } 内
+  assert.deepEqual(validateResolvedPlanShape({ plan: jsonStr }), []);
+  assert.deepEqual(validateResolvedPlanShape({ plan: mdStr }), []);
+});
+
+test("子字段被小模型额外 stringify 时自动递归修复", () => {
+  const plan = validPlan();
+  const messyPlan = {
+    ...plan,
+    plan_version: "2", // 字符串版本号
+    output: JSON.stringify(plan.output),
+    source_records: {
+      ...plan.source_records,
+      field_storage: JSON.stringify(plan.source_records.field_storage),
+    },
+    template: {
+      ...plan.template,
+      mappings: JSON.stringify(plan.template.mappings),
+    },
+  };
+  const coerced = coercePlanObject(messyPlan);
+  assert.ok(coerced);
+  assert.equal(coerced.plan_version, 2);
+  assert.equal(typeof coerced.output, "object");
+  assert.equal(typeof (coerced.template as Record<string, unknown>).mappings, "object");
+  assert.deepEqual(validateResolvedPlanShape(messyPlan), []);
+});
+

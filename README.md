@@ -119,10 +119,10 @@ DEEPSEEK_API_KEY=sk-...            REPORT_PROVIDER=deepseek REPORT_MODEL_ID=deep
 # B. 任意 OpenAI 兼容端点（公司内网 vLLM / Ollama / Qwen / 自建网关）
 REPORT_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 REPORT_LLM_API_KEY=sk-...
-# 再在 .pi/models.json 的 custom provider 下把 models[].id 改成你的模型名
+# 再在 .pi/agent/models.json 的 custom provider 下把 models[].id 改成你的模型名
 ```
 
-`.pi/models.json` 里 `baseUrl` / `apiKey` 写的是 `$REPORT_LLM_BASE_URL` / `$REPORT_LLM_API_KEY` 插值，**文件里没有明文密钥**；`compat` 用来关掉某些兼容端点不支持的字段（`supportsDeveloperRole` / `supportsReasoningEffort`）。密钥也可以放 `agents/<id>/agent_state/.vault.toml`（Agent 卡片 → 齿轮 → key vault），由运行时注入环境变量。
+`.pi/agent/models.json` 里 `baseUrl` / `apiKey` 写的是 `$REPORT_LLM_BASE_URL` / `$REPORT_LLM_API_KEY` 插值，**文件里没有明文密钥**；`compat` 用来关掉某些兼容端点不支持的字段（`supportsDeveloperRole` / `supportsReasoningEffort`）。密钥也可以放 `agents/<id>/agent_state/.vault.toml`（Agent 卡片 → 齿轮 → key vault），由运行时注入环境变量。
 
 ## 安全边界（为什么可以无人值守）
 

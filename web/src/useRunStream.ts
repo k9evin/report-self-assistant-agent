@@ -9,6 +9,7 @@ import {
   createRun,
   errorMessage,
   extractRun,
+  fetchRun,
   runStreamUrl,
 } from "./api";
 import type { AppMode } from "./mode";
@@ -48,6 +49,8 @@ export interface RunStreamState {
   finished: boolean;
   started: boolean;
   turns: Turn[];
+  /** 实时连接暂时中断并正在尝试自动重连修复 */
+  reconnecting?: boolean;
 }
 
 const INITIAL: RunStreamState = {
@@ -62,6 +65,7 @@ const INITIAL: RunStreamState = {
   finished: false,
   started: false,
   turns: [],
+  reconnecting: false,
 };
 
 /** 服务端在每次追问的开头插入的分段线；前端按轮展示时剥掉。 */
@@ -145,6 +149,7 @@ export interface RunStreamApi {
   startCase: (caseId: string) => Promise<string | null>;
   ask: (message: string) => Promise<void>;
   loadRun: (runId: string) => void;
+  reconnect: () => void;
   reset: () => void;
 }
 
@@ -152,11 +157,23 @@ export function useRunStream(): RunStreamApi {
   const [state, setState] = useState<RunStreamState>(INITIAL);
   const sourceRef = useRef<EventSource | null>(null);
   const aliveRef = useRef(true);
+  const activeRunIdRef = useRef<string | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const isFinishedRef = useRef(false);
+
+  const clearReconnectTimers = useCallback(() => {
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
 
   const closeStream = useCallback(() => {
+    clearReconnectTimers();
     sourceRef.current?.close();
     sourceRef.current = null;
-  }, []);
+  }, [clearReconnectTimers]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -172,8 +189,16 @@ export function useRunStream(): RunStreamApi {
   }, []);
 
   const openStream = useCallback(
-    (runId: string) => {
-      closeStream();
+    (runId: string, isReconnect = false) => {
+      clearReconnectTimers();
+      sourceRef.current?.close();
+      activeRunIdRef.current = runId;
+
+      if (!isReconnect) {
+        reconnectAttemptsRef.current = 0;
+        isFinishedRef.current = false;
+      }
+
       let source: EventSource;
       try {
         source = new EventSource(runStreamUrl(runId));
@@ -181,24 +206,40 @@ export function useRunStream(): RunStreamApi {
         update((previous) => ({
           ...previous,
           busy: false,
+          reconnecting: false,
           error: `无法建立实时连接（${errorMessage(cause)}）`,
         }));
         return;
       }
       sourceRef.current = source;
 
+      source.onopen = () => {
+        if (sourceRef.current !== source) return;
+        reconnectAttemptsRef.current = 0;
+        clearReconnectTimers();
+        update((previous) => (previous.reconnecting ? { ...previous, reconnecting: false } : previous));
+      };
+
       const handlePayload = (payload: unknown) => {
         if (sourceRef.current !== source || !isRecord(payload)) return;
+        reconnectAttemptsRef.current = 0;
+        clearReconnectTimers();
+
         const type = typeof payload.type === "string" ? payload.type : "";
 
         if (type === "snapshot") {
           const run = extractRun(payload);
-          if (run) update((previous) => applySnapshot(previous, run));
+          if (run) {
+            if (run.state !== "running") {
+              isFinishedRef.current = true;
+            }
+            update((previous) => ({ ...applySnapshot(previous, run), reconnecting: false }));
+          }
           return;
         }
         if (type === "status") {
           const phase = typeof payload.phase === "string" ? payload.phase : null;
-          if (phase) update((previous) => ({ ...previous, phase }));
+          if (phase) update((previous) => ({ ...previous, phase, reconnecting: false }));
           return;
         }
         if (type === "tool_start" || type === "tool_end") {
@@ -206,17 +247,25 @@ export function useRunStream(): RunStreamApi {
           if (!name) return;
           const at = typeof payload.at === "string" ? payload.at : undefined;
           if (type === "tool_start") {
-            update((previous) => ({ ...previous, tools: mergeToolEnd(previous.tools, name, undefined, at) }));
+            update((previous) => ({
+              ...previous,
+              tools: mergeToolEnd(previous.tools, name, undefined, at),
+              reconnecting: false,
+            }));
           } else {
             const ok = typeof payload.ok === "boolean" ? payload.ok : undefined;
-            update((previous) => ({ ...previous, tools: mergeToolEnd(previous.tools, name, ok, at) }));
+            update((previous) => ({
+              ...previous,
+              tools: mergeToolEnd(previous.tools, name, ok, at),
+              reconnecting: false,
+            }));
           }
           return;
         }
         if (type === "text") {
           const delta = typeof payload.delta === "string" ? payload.delta : "";
           if (!delta) return;
-          update((previous) => ({ ...previous, reply: previous.reply + delta }));
+          update((previous) => ({ ...previous, reply: previous.reply + delta, reconnecting: false }));
           return;
         }
         if (type === "check") {
@@ -227,11 +276,16 @@ export function useRunStream(): RunStreamApi {
             ok: payload.ok === true,
             detail: typeof payload.detail === "string" ? payload.detail : null,
           };
-          update((previous) => ({ ...previous, checks: mergeChecks(previous.checks, [check]) }));
+          update((previous) => ({
+            ...previous,
+            checks: mergeChecks(previous.checks, [check]),
+            reconnecting: false,
+          }));
           return;
         }
         if (type === "done") {
           const run = extractRun(payload);
+          isFinishedRef.current = true;
           update((previous) => {
             const merged = run ? applySnapshot(previous, run) : previous;
             const reply = merged.reply.length > 0 ? merged.reply : run?.reply ?? "";
@@ -241,14 +295,16 @@ export function useRunStream(): RunStreamApi {
               phase: run?.phase ?? merged.phase,
               busy: false,
               finished: true,
+              reconnecting: false,
             };
           });
           closeStream();
           return;
         }
         if (type === "error") {
+          isFinishedRef.current = true;
           const message = typeof payload.message === "string" ? payload.message : "后端报告了未知错误";
-          update((previous) => ({ ...previous, error: message, busy: false, finished: true }));
+          update((previous) => ({ ...previous, error: message, busy: false, finished: true, reconnecting: false }));
           closeStream();
         }
       };
@@ -270,20 +326,84 @@ export function useRunStream(): RunStreamApi {
         source.addEventListener(type, onMessage as unknown as EventListener);
       }
 
+      // 断链与自愈修复处理
       source.onerror = () => {
         if (sourceRef.current !== source) return;
-        closeStream();
-        update((previous) => {
-          if (previous.finished) return { ...previous, busy: false };
-          return {
-            ...previous,
-            busy: false,
-            error: previous.error ?? "与后端的实时连接已中断，请重新运行或刷新页面。",
-          };
-        });
+
+        // 若任务已完成，流关闭属于正常收尾
+        if (isFinishedRef.current) {
+          closeStream();
+          return;
+        }
+
+        reconnectAttemptsRef.current += 1;
+        const attempts = reconnectAttemptsRef.current;
+
+        // 主动通过 GET /api/runs/:id 检查任务真实状态（双通道主动自愈）
+        const attemptRepair = async () => {
+          if (!aliveRef.current || activeRunIdRef.current !== runId) return;
+
+          try {
+            const run = await fetchRun(runId);
+            if (!aliveRef.current || activeRunIdRef.current !== runId) return;
+
+            // 服务端已经完成，拉取最终快照并正常收尾
+            if (run.state !== "running") {
+              isFinishedRef.current = true;
+              update((previous) => {
+                const merged = applySnapshot(previous, run);
+                return {
+                  ...merged,
+                  reply: merged.reply.length > 0 ? merged.reply : run.reply ?? "",
+                  phase: run.phase ?? merged.phase,
+                  busy: false,
+                  finished: true,
+                  reconnecting: false,
+                };
+              });
+              closeStream();
+              return;
+            }
+
+            // 服务端仍在运行，先同步最新快照
+            update((previous) => applySnapshot(previous, run));
+          } catch {
+            /* 忽略瞬时离线错误 */
+          }
+
+          if (!aliveRef.current || activeRunIdRef.current !== runId) return;
+
+          // 若在重试上限内（最多重试 8 次，指数退避），执行自动重连修复
+          if (attempts <= 8) {
+            update((previous) => ({ ...previous, reconnecting: true }));
+
+            // 如果浏览器原生 EventSource 处于 CONNECTING（0）状态，前 3 次优先等待浏览器原生重连
+            if (source.readyState === 0 && attempts <= 3) {
+              return;
+            }
+
+            const delay = Math.min(1000 * Math.pow(1.4, attempts - 1), 5000);
+            clearReconnectTimers();
+            reconnectTimerRef.current = window.setTimeout(() => {
+              if (!aliveRef.current || activeRunIdRef.current !== runId) return;
+              openStream(runId, true);
+            }, delay);
+          } else {
+            // 超过最大重试次数，安全挂起，提示用户可手动重试
+            closeStream();
+            update((previous) => ({
+              ...previous,
+              busy: false,
+              reconnecting: false,
+              error: previous.error ?? "与后端的实时连接已中断，可点击「重试」重新连接",
+            }));
+          }
+        };
+
+        void attemptRepair();
       };
     },
-    [closeStream, update],
+    [clearReconnectTimers, closeStream, update],
   );
 
   const start = useCallback(
@@ -373,10 +493,19 @@ export function useRunStream(): RunStreamApi {
     [closeStream, openStream],
   );
 
+  const reconnect = useCallback(() => {
+    const targetId = state.runId || activeRunIdRef.current;
+    if (!targetId) return;
+    isFinishedRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    update((previous) => ({ ...previous, error: null, reconnecting: true, busy: true }));
+    openStream(targetId, true);
+  }, [openStream, state.runId, update]);
+
   const reset = useCallback(() => {
     closeStream();
     setState(INITIAL);
   }, [closeStream]);
 
-  return { state, startRun, startCase, ask, loadRun, reset };
+  return { state, startRun, startCase, ask, loadRun, reconnect, reset };
 }

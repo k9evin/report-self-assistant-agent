@@ -106,11 +106,124 @@ function requireString(value: unknown, field: string, problems: Problems): strin
   return value;
 }
 
+/**
+ * 宽容化解析与修复模型传入的 plan。
+ * 小模型（如 Qwen, DeepSeek-Coder, 7B/14B 等）在工具调用时常见如下序列化畸变：
+ * 1. 把 plan 整个序列化为 JSON 字符串
+ * 2. 包装了 Markdown 代码块（```json ... ```）
+ * 3. 顶层直接传入 plan 对象而未包装 `{ plan: ... }`，或反之双重包装
+ * 4. 内部子字段（如 mappings、source_records、output）被单独 stringify
+ * 5. plan_version 误填为字符串 "2"
+ * 此函数对其进行递归解析、宽容解包与规整。
+ */
+export function coercePlanObject(raw: unknown): Record<string, unknown> | null {
+  if (raw === null || raw === undefined) return null;
+
+  // 1. 如果传入的是字符串，尝试反序列化
+  if (typeof raw === "string") {
+    let str = raw.trim();
+    if (!str) return null;
+
+    // 剥离 Markdown 代码块
+    if (str.startsWith("```")) {
+      str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(str);
+      return coercePlanObject(parsed);
+    } catch {
+      // 尝试提取首尾的 { ... }
+      const start = str.indexOf("{");
+      const end = str.lastIndexOf("}");
+      if (start !== -1 && end > start) {
+        try {
+          const parsed: unknown = JSON.parse(str.slice(start, end + 1));
+          return coercePlanObject(parsed);
+        } catch {
+          /* ignore */
+        }
+      }
+      return null;
+    }
+  }
+
+  // 2. 如果传入的是对象
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = { ...(raw as Record<string, unknown>) };
+
+    // 如果包含外层包装 { plan: ... } 且非自身已是完整 plan
+    if ("plan" in obj && obj.plan !== undefined && obj.plan !== null && typeof obj.plan !== "boolean") {
+      if (!("source_records" in obj && "source_file" in obj && "template" in obj)) {
+        const inner = coercePlanObject(obj.plan);
+        if (inner) return inner;
+      }
+    }
+
+    // 3. 递归/遍历归一化子属性（处理子字段被序列化为字符串的情况）
+    // plan_version: "2" -> 2
+    if (typeof obj.plan_version === "string" && /^\d+$/.test(obj.plan_version.trim())) {
+      obj.plan_version = Number.parseInt(obj.plan_version.trim(), 10);
+    }
+
+    const parseSubField = (val: unknown): unknown => {
+      if (typeof val === "string") {
+        let s = val.trim();
+        if (s.startsWith("```")) {
+          s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+        }
+        if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) {
+          try {
+            return JSON.parse(s);
+          } catch {
+            return val;
+          }
+        }
+      }
+      return val;
+    };
+
+    if ("output" in obj) obj.output = parseSubField(obj.output);
+    if ("source_file" in obj) obj.source_file = parseSubField(obj.source_file);
+    if ("source_records" in obj) {
+      const src = parseSubField(obj.source_records);
+      if (typeof src === "object" && src !== null && !Array.isArray(src)) {
+        const srcObj = { ...(src as Record<string, unknown>) };
+        if ("field_storage" in srcObj) {
+          srcObj.field_storage = parseSubField(srcObj.field_storage);
+        }
+        obj.source_records = srcObj;
+      } else {
+        obj.source_records = src;
+      }
+    }
+    if ("template" in obj) {
+      const tmpl = parseSubField(obj.template);
+      if (typeof tmpl === "object" && tmpl !== null && !Array.isArray(tmpl)) {
+        const tmplObj = { ...(tmpl as Record<string, unknown>) };
+        if ("join" in tmplObj) tmplObj.join = parseSubField(tmplObj.join);
+        if ("mappings" in tmplObj) tmplObj.mappings = parseSubField(tmplObj.mappings);
+        obj.template = tmplObj;
+      } else {
+        obj.template = tmpl;
+      }
+    }
+    if ("normalization" in obj) obj.normalization = parseSubField(obj.normalization);
+
+    return obj;
+  }
+
+  return null;
+}
+
 /** 形状校验：返回问题清单，空数组表示通过入口守卫。 */
 export function validateResolvedPlanShape(input: unknown): Problems {
   const problems: Problems = [];
-  const plan = requireObject(input, "plan", problems);
-  if (!plan) return problems;
+  const plan = coercePlanObject(input);
+  if (!plan) {
+    problems.push("plan 必须是有效的对象或可解析的 JSON 字符串");
+    return problems;
+  }
 
   if (plan.plan_version !== 2) problems.push("plan_version 必须为 2");
 

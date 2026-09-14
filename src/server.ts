@@ -751,6 +751,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
           connection: "keep-alive",
           "x-accel-buffering": "no",
         });
+        res.write("retry: 1500\n\n");
         const write = (event: unknown) => res.write(`data: ${JSON.stringify(event)}\n\n`);
         write({ type: "snapshot", run: publicRun(run) });
         if (run.state !== "running") {

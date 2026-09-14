@@ -134,6 +134,13 @@ export function loadConfig(overrides: Partial<Pick<AppConfig, "provider" | "mode
   }
 
   const agentDir = path.join(projectRoot, ".pi", "agent");
+  const agentModelsPath = path.join(agentDir, "models.json");
+  const legacyModelsPath = path.join(projectRoot, ".pi", "models.json");
+  const modelsPath = fs.existsSync(agentModelsPath)
+    ? agentModelsPath
+    : fs.existsSync(legacyModelsPath)
+    ? legacyModelsPath
+    : agentModelsPath;
   return {
     projectRoot,
     configPath,
@@ -143,7 +150,7 @@ export function loadConfig(overrides: Partial<Pick<AppConfig, "provider" | "mode
     personaPath: path.join(projectRoot, "persona.md"),
     skillsDir: path.join(projectRoot, ".agents", "skills"),
     agentDir,
-    modelsPath: path.join(agentDir, "models.json"),
+    modelsPath,
     authPath: path.join(agentDir, "auth.json"),
     provider: overrides.provider ?? process.env.REPORT_PROVIDER ?? "deepseek",
     modelId: overrides.modelId ?? process.env.REPORT_MODEL_ID ?? "deepseek-v4-pro",

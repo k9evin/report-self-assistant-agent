@@ -164,6 +164,14 @@ export async function fetchRuns(): Promise<RunsResponse> {
   return body as unknown as RunsResponse;
 }
 
+export async function fetchRun(runId: string): Promise<RunView> {
+  const body = await request(`/api/runs/${encodeURIComponent(runId)}`);
+  if (!isRecord(body) || typeof body.run_id !== "string") {
+    throw new ApiFailure("获取会话详情返回了预期之外的结构", "BAD_RESPONSE");
+  }
+  return body as unknown as RunView;
+}
+
 export function createRun(body: {
   request: string;
   dataset_id: string | null;

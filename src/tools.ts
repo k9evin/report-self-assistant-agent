@@ -12,7 +12,7 @@ import { Type } from "typebox";
 
 import type { AppConfig } from "./config.ts";
 import { parseToolJson, runTool } from "./python.ts";
-import { validateResolvedPlanShape } from "./schemas.ts";
+import { coercePlanObject, validateResolvedPlanShape } from "./schemas.ts";
 import { DatasetError, readOnlyEvidence, resolveDataset } from "./storage.ts";
 import { appendEvent, loadTask, saveTask, sha256File, updateTaskStatus } from "./tasks.ts";
 
@@ -153,15 +153,28 @@ export function createReportTools(ctx: ReportToolContext): ToolDefinition[] {
       "提交 ResolvedPlan（PRD §7.2 的 JSON）。后端会做形状校验、注入 dataset_id、落盘并返回 plan_sha256。" +
       "校验不通过会返回全部问题字段；任何字段都不要凭猜测填写，必须能追溯到探测证据。",
     parameters: Type.Object({
-      plan: Type.Any({ description: "ResolvedPlan JSON 对象" }),
+      plan: Type.Any({ description: "ResolvedPlan JSON 对象（亦兼容 JSON 字符串及 Markdown 代码块包裹）" }),
     }),
     execute: async (_toolCallId, params) => {
-      const problems = validateResolvedPlanShape(params.plan);
+      const raw = (params as Record<string, unknown> | null)?.plan !== undefined
+        ? (params as Record<string, unknown>).plan
+        : params;
+      const parsedPlan = coercePlanObject(raw);
+      if (!parsedPlan) {
+        appendEvent(config, taskId, {
+          type: "plan.rejected_by_schema",
+          problems: ["plan 无法解析：必须是有效的 ResolvedPlan JSON 对象或可解析的 JSON 字符串"],
+        });
+        return toolError("PLAN_SCHEMA_INVALID", "ResolvedPlan 无法解析为有效 JSON 对象", {
+          problems: ["plan 无法解析：必须是有效的 ResolvedPlan JSON 对象或可解析的 JSON 字符串"],
+        });
+      }
+      const problems = validateResolvedPlanShape(parsedPlan);
       if (problems.length > 0) {
         appendEvent(config, taskId, { type: "plan.rejected_by_schema", problems });
         return toolError("PLAN_SCHEMA_INVALID", "ResolvedPlan 形状校验未通过", { problems });
       }
-      const plan = { ...(params.plan as Record<string, unknown>), dataset_id: datasetId() };
+      const plan = { ...parsedPlan, dataset_id: datasetId() };
       fs.writeFileSync(planFile, JSON.stringify(plan, null, 2) + "\n", "utf8");
       const planSha = sha256File(planFile);
       const current = task();

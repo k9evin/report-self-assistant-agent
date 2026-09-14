@@ -59,7 +59,7 @@ export function RunTab({
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { state, startRun, ask, loadRun, reset } = useRunStream();
+  const { state, startRun, ask, loadRun, reconnect, reset } = useRunStream();
   const turns = turnViews(state);
 
   const [localPinned, setLocalPinned] = useState<boolean | null>(null);
@@ -404,7 +404,24 @@ export function RunTab({
           </>
         )}
 
-        {state.error ? <ErrorBox message={state.error} title="任务执行异常" /> : null}
+        {state.reconnecting ? (
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-600 dark:text-amber-400">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-amber-500" />
+            </span>
+            <span className="font-medium">实时连接暂时中断，正在自动尝试恢复与同步最新进度…</span>
+          </div>
+        ) : null}
+
+        {state.error ? (
+          <ErrorBox
+            message={state.error}
+            title="任务执行异常"
+            onRetry={state.runId || selectedRunId ? () => void reconnect() : undefined}
+            retryLabel="重新连接"
+          />
+        ) : null}
 
         {finished && runId ? (
           <section className="flex flex-col gap-3">

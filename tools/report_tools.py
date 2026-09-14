@@ -613,7 +613,67 @@ def load_plan(plan_path):
     if not os.path.isfile(plan_path):
         die("PLAN_NOT_FOUND", "plan file does not exist", plan=plan_path)
     with open(plan_path, encoding="utf-8") as fh:
-        plan = json.load(fh)
+        raw = fh.read()
+    try:
+        plan = json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        die("PLAN_INVALID", f"plan file is not valid JSON: {exc}", plan=plan_path)
+
+    # 宽容化修复：如果 plan 是 JSON 字符串或包装了 Markdown 语法
+    if isinstance(plan, str):
+        clean = plan.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r"^```(?:json)?\s*", "", clean)
+            clean = re.sub(r"\s*```$", "", clean).strip()
+        try:
+            plan = json.loads(clean)
+        except Exception:  # noqa: BLE001
+            pass
+
+    if isinstance(plan, dict):
+        # 兼容顶层包装 { "plan": { ... } }
+        if "plan" in plan and isinstance(plan["plan"], (dict, str)):
+            inner = plan["plan"]
+            if isinstance(inner, str):
+                try:
+                    inner = json.loads(inner)
+                except Exception:  # noqa: BLE001
+                    pass
+            if isinstance(inner, dict):
+                plan = inner
+
+        # 兼容 plan_version 误填为字符串
+        if isinstance(plan.get("plan_version"), str) and plan["plan_version"].isdigit():
+            plan["plan_version"] = int(plan["plan_version"])
+
+        # 兼容小模型将子对象序列化为字符串
+        for subkey in ("output", "source_file", "source_records", "template", "normalization"):
+            if isinstance(plan.get(subkey), str):
+                try:
+                    plan[subkey] = json.loads(plan[subkey])
+                except Exception:  # noqa: BLE001
+                    pass
+
+        if isinstance(plan.get("template"), dict):
+            tmpl = plan["template"]
+            for subkey in ("join", "mappings"):
+                if isinstance(tmpl.get(subkey), str):
+                    try:
+                        tmpl[subkey] = json.loads(tmpl[subkey])
+                    except Exception:  # noqa: BLE001
+                        pass
+
+        if isinstance(plan.get("source_records"), dict):
+            src = plan["source_records"]
+            if isinstance(src.get("field_storage"), str):
+                try:
+                    src["field_storage"] = json.loads(src["field_storage"])
+                except Exception:  # noqa: BLE001
+                    pass
+
+    if not isinstance(plan, dict):
+        die("PLAN_INVALID", "plan must be a JSON object", plan=plan_path)
+
     missing = [k for k in REQUIRED_PLAN_KEYS if k not in plan]
     if missing:
         die("PLAN_INVALID", "plan is missing required keys", missing=missing)

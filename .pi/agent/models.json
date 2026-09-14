@@ -9,7 +9,10 @@
         "supportsReasoningEffort": false
       },
       "models": [
-        { "id": "qwen3-max" }
+        { "id": "qwen3-max" },
+        { "id": "deepseek-v4-pro" },
+        { "id": "deepseek-chat" },
+        { "id": "deepseek-coder" }
       ]
     }
   }

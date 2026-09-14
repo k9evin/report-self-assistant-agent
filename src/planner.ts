@@ -175,7 +175,7 @@ export class PiPlanner implements PlannerService {
     const model = runtime.getModel(this.config.provider, this.config.modelId);
     if (!model) {
       throw new Error(
-        `模型不可用: (${this.config.provider}, ${this.config.modelId}) — 检查 .pi/models.json 与 REPORT_LLM_* 环境变量`,
+        `模型不可用: (${this.config.provider}, ${this.config.modelId}) — 检查 .pi/agent/models.json 与 REPORT_LLM_* 环境变量`,
       );
     }
 
