@@ -19,7 +19,8 @@ function PopoverTrigger({
 function PopoverContent({
   className,
   align = "start",
-  sideOffset = 4,
+  sideOffset = 6,
+  collisionPadding = 16,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
@@ -28,8 +29,9 @@ function PopoverContent({
         data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn(
-          "z-50 rounded-xl border border-border bg-card p-3 text-card-foreground shadow-xl outline-none",
+          "z-50 max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 text-card-foreground shadow-xl outline-none",
           className
         )}
         {...props}

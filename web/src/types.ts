@@ -30,6 +30,7 @@ export interface Dataset {
   access?: string | null;
   mount_root_id?: string | null;
   mount_root?: string | null;
+  relative_path?: string | null;
   resolved_path?: string | null;
   available: boolean;
   problem?: DatasetProblem | null;

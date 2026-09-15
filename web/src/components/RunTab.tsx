@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
   errorMessage,
@@ -223,45 +222,33 @@ export function RunTab({
         {loadingDatasets ? (
           <LoadingDots label="正在读取数据源…" />
         ) : datasetsError ? (
-          <ErrorBox message={datasetsError} title="数据集加载失败" onRetry={() => void loadDatasets()} />
-        ) : (datasets ?? []).length === 0 ? (
-          <span className="text-xs text-muted-foreground">后端无数据集配置，请检查挂载。</span>
+          <ErrorBox message={datasetsError} title="数据源加载失败" onRetry={() => void loadDatasets()} />
         ) : (
-          <Select value={datasetId} onValueChange={(value) => { setDatasetId(value); setMountRootId(""); setDirectoryPath(""); }} disabled={busy}>
-            <SelectTrigger size="sm" className="min-w-44 bg-card rounded-lg" aria-label="选择测试数据集">
-              <SelectValue placeholder="请选择测试数据集" />
-            </SelectTrigger>
-            <SelectContent>
-              {(datasets ?? []).map((entry) => (
-                <SelectItem key={entry.dataset_id} value={entry.dataset_id} disabled={!entry.available}>
-                  {entry.name}
-                  {entry.available
-                    ? typeof entry.sn_count === "number"
-                      ? `（${entry.sn_count} 个 SN · 只读）`
-                      : ""
-                    : `（不可用：${entry.problem?.message ?? "原因未知"}）`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <DirectoryTreeSelect
-          roots={mountRoots}
-          value={mountRootId ? { mountRootId, relativePath: directoryPath } : null}
-          fetchChildren={fetchDirectories}
-          disabled={busy}
-          onSelect={(selection) => {
-            if (selection) {
-              setDatasetId("");
-              setMountRootId(selection.mountRootId);
-              setDirectoryPath(selection.relativePath);
-            } else {
-              setMountRootId("");
-              setDirectoryPath("");
+          <DirectoryTreeSelect
+            roots={mountRoots}
+            presets={datasets ?? []}
+            value={
+              datasetId
+                ? { datasetId, mountRootId, relativePath: directoryPath, label: selectedDataset?.name ?? datasetId }
+                : mountRootId
+                  ? { datasetId: "", mountRootId, relativePath: directoryPath, label: directoryPath ? `[${mountRootId}] /${directoryPath}` : `[${mountRootId}] 根目录` }
+                  : null
             }
-          }}
-        />
+            fetchChildren={fetchDirectories}
+            disabled={busy}
+            onSelect={(selection) => {
+              if (selection) {
+                setDatasetId(selection.datasetId ?? "");
+                setMountRootId(selection.mountRootId);
+                setDirectoryPath(selection.relativePath);
+              } else {
+                setDatasetId("");
+                setMountRootId("");
+                setDirectoryPath("");
+              }
+            }}
+          />
+        )}
 
         {/* 开发模式下提供一键填入/恢复默认测试配置 */}
         {mode === "dev" && !busy ? (
