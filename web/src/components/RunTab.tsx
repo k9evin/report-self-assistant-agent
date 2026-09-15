@@ -248,12 +248,18 @@ export function RunTab({
 
         <DirectoryTreeSelect
           roots={mountRoots}
+          value={mountRootId ? { mountRootId, relativePath: directoryPath } : null}
           fetchChildren={fetchDirectories}
           disabled={busy}
           onSelect={(selection) => {
-            setDatasetId("");
-            setMountRootId(selection?.mountRootId ?? "");
-            setDirectoryPath(selection?.relativePath ?? "");
+            if (selection) {
+              setDatasetId("");
+              setMountRootId(selection.mountRootId);
+              setDirectoryPath(selection.relativePath);
+            } else {
+              setMountRootId("");
+              setDirectoryPath("");
+            }
           }}
         />
 
@@ -264,6 +270,8 @@ export function RunTab({
             onClick={() => {
               setText(DEFAULT_REQUEST);
               setDatasetId("ds_dev_fixture");
+              setMountRootId("");
+              setDirectoryPath("");
             }}
             className="flex items-center gap-1 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand hover:bg-brand/20 transition-all cursor-pointer shadow-2xs"
             title="一键填入开发模式默认测试需求与夹具数据集"
@@ -285,6 +293,13 @@ export function RunTab({
           {selectedDataset.writable_by_process ? (
             <span className="text-warn font-medium">· ⚠️ 挂载可写</span>
           ) : null}
+        </div>
+      ) : mountRootId ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="font-mono bg-brand/10 text-brand px-2 py-0.5 rounded text-[11px] border border-brand/20">
+            {mountRootId}:{directoryPath || "."}
+          </span>
+          <span>· 服务器共享目录（只读探测）</span>
         </div>
       ) : null}
     </div>
