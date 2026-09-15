@@ -1,5 +1,5 @@
 /** 页签 1：运行任务 —— 任务配置、对话执行与结果展示。 */
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +19,7 @@ import type { AppMode } from "../mode";
 import type { Dataset, MountRoot, TemplateInfo } from "../types";
 import { turnViews, useRunStream } from "../useRunStream";
 import { Composer } from "./Composer";
-const DirectoryTreeSelect = lazy(() => import("./DirectoryTreeSelect").then((module) => ({ default: module.DirectoryTreeSelect })));
+import { DirectoryTreeSelect } from "./DirectoryTreeSelect";
 import { AssistantTurn, UserTurn } from "./Conversation";
 import { RunResult } from "./RunResult";
 import { ErrorBox, LoadingDots } from "./States";
@@ -246,18 +246,16 @@ export function RunTab({
           </Select>
         )}
 
-        <Suspense fallback={<span className="text-xs text-muted-foreground">正在加载目录选择器…</span>}>
-          <DirectoryTreeSelect
-            roots={mountRoots}
-            fetchChildren={fetchDirectories}
-            disabled={busy}
-            onSelect={(selection) => {
-              setDatasetId("");
-              setMountRootId(selection?.mountRootId ?? "");
-              setDirectoryPath(selection?.relativePath ?? "");
-            }}
-          />
-        </Suspense>
+        <DirectoryTreeSelect
+          roots={mountRoots}
+          fetchChildren={fetchDirectories}
+          disabled={busy}
+          onSelect={(selection) => {
+            setDatasetId("");
+            setMountRootId(selection?.mountRootId ?? "");
+            setDirectoryPath(selection?.relativePath ?? "");
+          }}
+        />
 
         {/* 开发模式下提供一键填入/恢复默认测试配置 */}
         {mode === "dev" && !busy ? (
