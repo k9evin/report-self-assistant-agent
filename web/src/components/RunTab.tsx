@@ -1,5 +1,5 @@
 /** 页签 1：运行任务 —— 任务配置、对话执行与结果展示。 */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,9 +16,10 @@ import {
   uploadTemplate,
 } from "../api";
 import type { AppMode } from "../mode";
-import type { Dataset, DirectoryEntry, MountRoot, TemplateInfo } from "../types";
+import type { Dataset, MountRoot, TemplateInfo } from "../types";
 import { turnViews, useRunStream } from "../useRunStream";
 import { Composer } from "./Composer";
+const DirectoryTreeSelect = lazy(() => import("./DirectoryTreeSelect").then((module) => ({ default: module.DirectoryTreeSelect })));
 import { AssistantTurn, UserTurn } from "./Conversation";
 import { RunResult } from "./RunResult";
 import { ErrorBox, LoadingDots } from "./States";
@@ -54,7 +55,6 @@ export function RunTab({
   const [datasetId, setDatasetId] = useState("");
   const [mountRoots, setMountRoots] = useState<MountRoot[]>([]);
   const [mountRootId, setMountRootId] = useState("");
-  const [directoryLevels, setDirectoryLevels] = useState<DirectoryEntry[][]>([]);
   const [directoryPath, setDirectoryPath] = useState("");
 
   // 上线模式中不预填 prompt，仅开发模式预置测试输入
@@ -210,21 +210,10 @@ export function RunTab({
     } else {
       setDatasetId("");
     }
+    setMountRootId("");
+    setDirectoryPath("");
     reset();
     onNewSession?.();
-  };
-
-  const selectMountRoot = async (rootId: string) => {
-    setMountRootId(rootId);
-    setDatasetId("");
-    setDirectoryPath("");
-    setDirectoryLevels([await fetchDirectories(rootId)]);
-  };
-
-  const selectDirectory = async (level: number, relativePath: string) => {
-    const next = await fetchDirectories(mountRootId, relativePath);
-    setDirectoryPath(relativePath);
-    setDirectoryLevels((previous) => [...previous.slice(0, level + 1), next]);
   };
 
   const datasetRow = (
@@ -238,7 +227,7 @@ export function RunTab({
         ) : (datasets ?? []).length === 0 ? (
           <span className="text-xs text-muted-foreground">后端无数据集配置，请检查挂载。</span>
         ) : (
-          <Select value={datasetId} onValueChange={(value) => { setDatasetId(value); setMountRootId(""); setDirectoryLevels([]); setDirectoryPath(""); }} disabled={busy}>
+          <Select value={datasetId} onValueChange={(value) => { setDatasetId(value); setMountRootId(""); setDirectoryPath(""); }} disabled={busy}>
             <SelectTrigger size="sm" className="min-w-44 bg-card rounded-lg" aria-label="选择测试数据集">
               <SelectValue placeholder="请选择测试数据集" />
             </SelectTrigger>
@@ -257,25 +246,18 @@ export function RunTab({
           </Select>
         )}
 
-        <Select value={mountRootId} onValueChange={(value) => void selectMountRoot(value)} disabled={busy}>
-          <SelectTrigger size="sm" className="min-w-36 bg-card rounded-lg" aria-label="选择服务器目录入口">
-            <SelectValue placeholder="服务器目录入口" />
-          </SelectTrigger>
-          <SelectContent>
-            {mountRoots.filter((root) => root.available).map((root) => (
-              <SelectItem key={root.mount_root_id} value={root.mount_root_id}>{root.mount_root_id}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {directoryLevels.map((entries, level) => entries.length > 0 ? (
-          <Select key={`${mountRootId}-${level}`} value={directoryLevels[level + 1] ? directoryPath.split("/").slice(0, level + 1).join("/") : undefined} onValueChange={(value) => void selectDirectory(level, value)} disabled={busy}>
-            <SelectTrigger size="sm" className="min-w-32 bg-card rounded-lg" aria-label={`选择第 ${level + 1} 层目录`}>
-              <SelectValue placeholder="选择子目录" />
-            </SelectTrigger>
-            <SelectContent>{entries.map((entry) => <SelectItem key={entry.relative_path} value={entry.relative_path}>{entry.name}</SelectItem>)}</SelectContent>
-          </Select>
-        ) : null)}
+        <Suspense fallback={<span className="text-xs text-muted-foreground">正在加载目录选择器…</span>}>
+          <DirectoryTreeSelect
+            roots={mountRoots}
+            fetchChildren={fetchDirectories}
+            disabled={busy}
+            onSelect={(selection) => {
+              setDatasetId("");
+              setMountRootId(selection?.mountRootId ?? "");
+              setDirectoryPath(selection?.relativePath ?? "");
+            }}
+          />
+        </Suspense>
 
         {/* 开发模式下提供一键填入/恢复默认测试配置 */}
         {mode === "dev" && !busy ? (
