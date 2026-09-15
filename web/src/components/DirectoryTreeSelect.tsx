@@ -55,7 +55,7 @@ export function DirectoryTreeSelect({
   const label = path || "选择服务器目录";
 
   return (
-    <div ref={rootRef} className="relative min-w-52">
+    <div ref={rootRef} className="relative w-52 shrink-0">
       <button type="button" className="flex h-8 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-left text-xs disabled:opacity-50" disabled={disabled} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
         <span className="truncate">{label}</span><span className="text-muted-foreground">⌄</span>
       </button>
