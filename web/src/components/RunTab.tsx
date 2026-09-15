@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   errorMessage,
   fetchDatasets,
+  fetchDirectories,
+  fetchMountRoots,
   fetchTemplateInfo,
   resetTemplate,
   templateDownloadUrl,
@@ -14,7 +16,7 @@ import {
   uploadTemplate,
 } from "../api";
 import type { AppMode } from "../mode";
-import type { Dataset, TemplateInfo } from "../types";
+import type { Dataset, DirectoryEntry, MountRoot, TemplateInfo } from "../types";
 import { turnViews, useRunStream } from "../useRunStream";
 import { Composer } from "./Composer";
 import { AssistantTurn, UserTurn } from "./Conversation";
@@ -50,6 +52,10 @@ export function RunTab({
   const [datasetsError, setDatasetsError] = useState<string | null>(null);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [datasetId, setDatasetId] = useState("");
+  const [mountRoots, setMountRoots] = useState<MountRoot[]>([]);
+  const [mountRootId, setMountRootId] = useState("");
+  const [directoryLevels, setDirectoryLevels] = useState<DirectoryEntry[][]>([]);
+  const [directoryPath, setDirectoryPath] = useState("");
 
   // 上线模式中不预填 prompt，仅开发模式预置测试输入
   const [text, setText] = useState(() => (mode === "dev" ? DEFAULT_REQUEST : ""));
@@ -91,8 +97,9 @@ export function RunTab({
     setLoadingDatasets(true);
     setDatasetsError(null);
     try {
-      const body = await fetchDatasets();
+      const [body, roots] = await Promise.all([fetchDatasets(), fetchMountRoots()]);
       setDatasets(body.datasets);
+      setMountRoots(roots.mount_roots);
       if (mode === "dev") {
         const devDefault = body.datasets.find((entry) => entry.dataset_id === "ds_dev_fixture" && entry.available);
         const firstAvailable = body.datasets.find((entry) => entry.available);
@@ -173,7 +180,7 @@ export function RunTab({
   }, [state.reply, state.tools.length, state.started, state.finished, state.runId]);
 
   const hasTemplate = Boolean(templateInfo?.has_template);
-  const canSend = !busy && text.trim().length > 0 && (started || datasetId !== "");
+  const canSend = !busy && text.trim().length > 0 && (started || datasetId !== "" || (mountRootId !== "" && directoryPath !== ""));
 
   const submit = async () => {
     const message = text.trim();
@@ -188,7 +195,9 @@ export function RunTab({
       void ask(message);
       return;
     }
-    const newRunId = await startRun({ request: message, dataset_id: datasetId, auto_execute: true, mode });
+    const newRunId = await startRun(datasetId
+      ? { request: message, dataset_id: datasetId, auto_execute: true, mode }
+      : { request: message, mount_root_id: mountRootId, relative_path: directoryPath, auto_execute: true, mode });
     if (newRunId) {
       onRunCreated?.(newRunId);
     }
@@ -205,6 +214,19 @@ export function RunTab({
     onNewSession?.();
   };
 
+  const selectMountRoot = async (rootId: string) => {
+    setMountRootId(rootId);
+    setDatasetId("");
+    setDirectoryPath("");
+    setDirectoryLevels([await fetchDirectories(rootId)]);
+  };
+
+  const selectDirectory = async (level: number, relativePath: string) => {
+    const next = await fetchDirectories(mountRootId, relativePath);
+    setDirectoryPath(relativePath);
+    setDirectoryLevels((previous) => [...previous.slice(0, level + 1), next]);
+  };
+
   const datasetRow = (
     <div className="flex w-full flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
@@ -216,7 +238,7 @@ export function RunTab({
         ) : (datasets ?? []).length === 0 ? (
           <span className="text-xs text-muted-foreground">后端无数据集配置，请检查挂载。</span>
         ) : (
-          <Select value={datasetId} onValueChange={setDatasetId} disabled={busy}>
+          <Select value={datasetId} onValueChange={(value) => { setDatasetId(value); setMountRootId(""); setDirectoryLevels([]); setDirectoryPath(""); }} disabled={busy}>
             <SelectTrigger size="sm" className="min-w-44 bg-card rounded-lg" aria-label="选择测试数据集">
               <SelectValue placeholder="请选择测试数据集" />
             </SelectTrigger>
@@ -234,6 +256,26 @@ export function RunTab({
             </SelectContent>
           </Select>
         )}
+
+        <Select value={mountRootId} onValueChange={(value) => void selectMountRoot(value)} disabled={busy}>
+          <SelectTrigger size="sm" className="min-w-36 bg-card rounded-lg" aria-label="选择服务器目录入口">
+            <SelectValue placeholder="服务器目录入口" />
+          </SelectTrigger>
+          <SelectContent>
+            {mountRoots.filter((root) => root.available).map((root) => (
+              <SelectItem key={root.mount_root_id} value={root.mount_root_id}>{root.mount_root_id}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {directoryLevels.map((entries, level) => entries.length > 0 ? (
+          <Select key={`${mountRootId}-${level}`} value={directoryLevels[level + 1] ? directoryPath.split("/").slice(0, level + 1).join("/") : undefined} onValueChange={(value) => void selectDirectory(level, value)} disabled={busy}>
+            <SelectTrigger size="sm" className="min-w-32 bg-card rounded-lg" aria-label={`选择第 ${level + 1} 层目录`}>
+              <SelectValue placeholder="选择子目录" />
+            </SelectTrigger>
+            <SelectContent>{entries.map((entry) => <SelectItem key={entry.relative_path} value={entry.relative_path}>{entry.name}</SelectItem>)}</SelectContent>
+          </Select>
+        ) : null)}
 
         {/* 开发模式下提供一键填入/恢复默认测试配置 */}
         {mode === "dev" && !busy ? (

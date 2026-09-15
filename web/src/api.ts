@@ -5,7 +5,9 @@
 import type {
   CasesResponse,
   DatasetsResponse,
+  DirectoryEntry,
   HealthResponse,
+  MountRootsResponse,
   OkResponse,
   RunCreatedResponse,
   RunView,
@@ -148,6 +150,20 @@ export async function fetchDatasets(): Promise<DatasetsResponse> {
   return body as unknown as DatasetsResponse;
 }
 
+export async function fetchMountRoots(): Promise<MountRootsResponse> {
+  const body = await request("/api/mount-roots");
+  if (!isRecord(body) || !Array.isArray(body.mount_roots)) throw new ApiFailure("挂载根接口返回异常", "BAD_RESPONSE");
+  return body as unknown as MountRootsResponse;
+}
+
+export async function fetchDirectories(mountRootId: string, relativePath = ""): Promise<DirectoryEntry[]> {
+  const params = new URLSearchParams();
+  if (relativePath) params.set("path", relativePath);
+  const body = await request(`/api/mount-roots/${encodeURIComponent(mountRootId)}/directories?${params.toString()}`);
+  if (!isRecord(body) || !Array.isArray(body.directories)) throw new ApiFailure("目录接口返回异常", "BAD_RESPONSE");
+  return body.directories as DirectoryEntry[];
+}
+
 export async function fetchCases(): Promise<CasesResponse> {
   const body = await request("/api/cases");
   if (!isRecord(body) || !Array.isArray(body.cases)) {
@@ -156,16 +172,16 @@ export async function fetchCases(): Promise<CasesResponse> {
   return body as unknown as CasesResponse;
 }
 
-export async function fetchRuns(): Promise<RunsResponse> {
-  const body = await request("/api/runs");
+export async function fetchRuns(mode: AppMode = "prod"): Promise<RunsResponse> {
+  const body = await request(`/api/runs?mode=${mode}`);
   if (!isRecord(body) || !Array.isArray(body.runs)) {
     throw new ApiFailure("历史对话接口返回了预期之外的结构", "BAD_RESPONSE");
   }
   return body as unknown as RunsResponse;
 }
 
-export async function fetchRun(runId: string): Promise<RunView> {
-  const body = await request(`/api/runs/${encodeURIComponent(runId)}`);
+export async function fetchRun(runId: string, mode: AppMode = "prod"): Promise<RunView> {
+  const body = await request(`/api/runs/${encodeURIComponent(runId)}?mode=${mode}`);
   if (!isRecord(body) || typeof body.run_id !== "string") {
     throw new ApiFailure("获取会话详情返回了预期之外的结构", "BAD_RESPONSE");
   }
@@ -174,7 +190,9 @@ export async function fetchRun(runId: string): Promise<RunView> {
 
 export function createRun(body: {
   request: string;
-  dataset_id: string | null;
+  dataset_id?: string | null;
+  mount_root_id?: string;
+  relative_path?: string;
   auto_execute: boolean;
   mode?: AppMode;
   tag?: string;
@@ -197,10 +215,11 @@ export function askRun(runId: string, message: string): Promise<OkResponse> {
   return post(`/api/runs/${encodeURIComponent(runId)}/ask`, { message }) as Promise<OkResponse>;
 }
 
-export function runStreamUrl(runId: string): string {
+export function runStreamUrl(runId: string, mode: AppMode = "prod"): string {
   const token = getAuthToken();
-  const base = `/api/runs/${encodeURIComponent(runId)}/stream`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+  const params = new URLSearchParams({ mode });
+  if (token) params.set("token", token);
+  return `/api/runs/${encodeURIComponent(runId)}/stream?${params.toString()}`;
 }
 
 /** 产物下载地址：路径里的 / 逐段编码，服务端会拒绝含 / 的文件名。 */

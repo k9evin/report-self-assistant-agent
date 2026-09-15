@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { loadConfig } from "../../src/config.ts";
-import { DatasetError, readOnlyEvidence, resolveDataset } from "../../src/storage.ts";
+import { DatasetError, listDatasetDirectories, readOnlyEvidence, resolveDataset, resolveDirectoryDataset } from "../../src/storage.ts";
 
 /** 造一个临时挂载根 + 数据集目录，并返回配置覆盖用的环境变量。 */
 function withMount<T>(fn: (ctx: { root: string; datasetDir: string; outside: string }) => T): T {
@@ -131,6 +131,20 @@ test("挂载根不存在时抛 MOUNT_NOT_FOUND", () => {
 test("未知 dataset_id 被拒绝", () => {
   withMount(() => {
     assert.throws(() => resolveDataset(loadConfig(), "ds_nope"), /未知 dataset_id/);
+  });
+});
+
+test("目录选择只列出挂载根内的下一层目录", () => {
+  withMount(({ root, outside }) => {
+    fs.mkdirSync(path.join(root, "line-a", "station-1"), { recursive: true });
+    fs.symlinkSync(outside, path.join(root, "line-out"));
+    assert.deepEqual(listDatasetDirectories(loadConfig(), "dev").map((entry) => entry.name), ["line-a", "TD28"]);
+    const selected = resolveDirectoryDataset(loadConfig(), "dev", "line-a/station-1");
+    assert.equal(selected.access, "read_only");
+    assert.throws(
+      () => resolveDirectoryDataset(loadConfig(), "dev", "../outside"),
+      (error: unknown) => error instanceof DatasetError && error.code === "DATASET_OUTSIDE_MOUNT_ROOT",
+    );
   });
 });
 

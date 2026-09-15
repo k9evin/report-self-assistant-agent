@@ -33,6 +33,7 @@ export interface AppConfig {
   projectRoot: string;
   configPath: string;
   workDir: string;
+  databasePath: string;
   toolsScript: string;
   pythonBin: string;
   personaPath: string;
@@ -133,6 +134,7 @@ export function loadConfig(overrides: Partial<Pick<AppConfig, "provider" | "mode
     });
   }
 
+  const workDir = path.resolve(process.env.REPORT_WORK_DIR ?? path.join(projectRoot, "work"));
   const agentDir = path.join(projectRoot, ".pi", "agent");
   const agentModelsPath = path.join(agentDir, "models.json");
   const legacyModelsPath = path.join(projectRoot, ".pi", "models.json");
@@ -144,7 +146,8 @@ export function loadConfig(overrides: Partial<Pick<AppConfig, "provider" | "mode
   return {
     projectRoot,
     configPath,
-    workDir: path.resolve(process.env.REPORT_WORK_DIR ?? path.join(projectRoot, "work")),
+    workDir,
+    databasePath: path.resolve(process.env.REPORT_DB_PATH ?? path.join(workDir, "report-agent.sqlite")),
     toolsScript: path.join(projectRoot, "tools", "report_tools.py"),
     pythonBin: process.env.REPORT_PYTHON ?? process.env.PYTHON ?? "python3",
     personaPath: path.join(projectRoot, "persona.md"),

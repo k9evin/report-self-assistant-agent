@@ -461,6 +461,21 @@ def analyze_document(root):
     return record_candidates[:5]
 
 
+def load_xml(path):
+    """Parse XML bytes, recovering common Chinese encodings when declarations are wrong."""
+    raw = open(path, "rb").read()
+    try:
+        return ET.fromstring(raw)
+    except ET.ParseError as initial_error:
+        failures = {"declared": str(initial_error)}
+        for encoding in ("utf-8", "gb18030"):
+            try:
+                return ET.fromstring(raw.decode(encoding))
+            except (UnicodeDecodeError, ET.ParseError) as exc:
+                failures[encoding] = str(exc)
+        raise ValueError(f"XML encoding or syntax error: {failures}") from initial_error
+
+
 def structural_fingerprint(root):
     sig = []
     for el in root.iter():
@@ -488,7 +503,7 @@ def inspect_xml(dataset, pattern, sample_count):
             problems.append({"sn": os.path.basename(sn_dir), "code": note,
                              "matches": [os.path.basename(m) for m in matches]})
         try:
-            root = ET.parse(path).getroot()
+            root = load_xml(path)
         except Exception as exc:  # noqa: BLE001
             problems.append({"sn": os.path.basename(sn_dir), "code": "XML_PARSE_ERROR", "message": str(exc)})
             continue
@@ -710,7 +725,7 @@ def plan_supported(plan):
 
 def build_case_index(xml_path, plan):
     src = plan["source_records"]
-    root = ET.parse(xml_path).getroot()
+    root = load_xml(xml_path)
     record_sel = src["record_selector"]
     key_sel = src["key_selector"]
     storage = src.get("field_storage") or {}

@@ -41,6 +41,10 @@ export interface DatasetsResponse {
   datasets: Dataset[];
 }
 
+export interface DirectoryEntry { name: string; relative_path: string; }
+export interface MountRoot { mount_root_id: string; available: boolean; directories: DirectoryEntry[]; problem?: string; }
+export interface MountRootsResponse { mount_roots: MountRoot[]; }
+
 export interface CaseExpect {
   status?: string[];
   execution_allowed?: boolean;
@@ -130,6 +134,8 @@ export interface RunView {
   state?: "running" | "done" | "error" | string;
   task_id?: string;
   dataset_id?: string;
+  mount_root_id?: string;
+  relative_path?: string;
   request?: string;
   phase?: string;
   tool_calls?: ToolCall[] | null;

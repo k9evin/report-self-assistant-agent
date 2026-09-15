@@ -54,9 +54,16 @@ for idx, sn in enumerate(["K7893981", "K7893982", "K7893983"]):
             for name, value in VALUES.items()
         )
         tasks.append(f'  <task name="{case}">\n{items}  </task>\n')
-    xml = '<test_report sn="{}">\n{}</test_report>\n'.format(sn, "".join(tasks))
-    with open(os.path.join(sn_dir, f"{sn}_test_report.xml"), "w", encoding="utf-8") as fh:
-        fh.write(xml)
+    # 最后一份报告模拟现场常见问题：内容实际 GBK，XML 声明却错误写为 UTF-8。
+    description = ' description="中文报告"' if idx == 2 else ""
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n<test_report sn="{}"{}>\n{}</test_report>\n'.format(sn, description, "".join(tasks))
+    report_path = os.path.join(sn_dir, f"{sn}_test_report.xml")
+    if idx == 2:
+        with open(report_path, "wb") as fh:
+            fh.write(xml.encode("gbk"))
+    else:
+        with open(report_path, "w", encoding="utf-8") as fh:
+            fh.write(xml)
 
 with open(os.path.join(OUT, "plan.json"), "w", encoding="utf-8") as fh:
     fh.write("""{

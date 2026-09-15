@@ -12,11 +12,12 @@ import http from "node:http";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-import { loadConfig, type AppConfig } from "./config.ts";
+import { loadConfig, type AppConfig, type DatasetRecord } from "./config.ts";
 import { getCase, listCases, runCase, type CaseSpec, type RunEvent } from "./cases.ts";
 import { createTask, loadTask, readEvents, type TaskRecord } from "./tasks.ts";
 import { createPlanner } from "./planner.ts";
-import { DatasetError, resolveDataset } from "./storage.ts";
+import { DatasetError, listDatasetDirectories, resolveDataset, resolveDirectoryDataset } from "./storage.ts";
+import { HistoryStore, type EnvironmentUser } from "./history.ts";
 
 const VERSION = "1.0";
 const HEARTBEAT_MS = 15_000;
@@ -52,6 +53,7 @@ interface RunState {
   duration_ms: number | null;
   tag: string | null;
   pinned: boolean;
+  environment: EnvironmentUser;
 }
 
 type ServerEvent =
@@ -61,6 +63,7 @@ type ServerEvent =
   | { type: "snapshot"; run: RunState };
 
 const runs = new Map<string, RunState>();
+const transientDatasets = new Map<string, DatasetRecord>();
 const subscribers = new Map<string, Set<(event: ServerEvent) => void>>();
 
 function emit(runId: string, event: ServerEvent) {
@@ -70,6 +73,8 @@ function emit(runId: string, event: ServerEvent) {
 function publicRun(run: RunState): RunState {
   return { ...run };
 }
+
+let history: HistoryStore;
 
 // --------------------------------------------------------------------------- //
 // 环境准备
@@ -167,7 +172,7 @@ function datasetViews(config: AppConfig) {
 
 let runSeq = 0;
 
-function newRunState(kind: "free" | "case", datasetId: string, request: string, autoExecute: boolean, caseId: string | null, tag: string | null = null): RunState {
+function newRunState(kind: "free" | "case", datasetId: string, request: string, autoExecute: boolean, caseId: string | null, tag: string | null = null, environment: EnvironmentUser = "prod"): RunState {
   runSeq += 1;
   const run: RunState = {
     run_id: `run-${Date.now().toString(36)}-${runSeq.toString(36)}`,
@@ -193,7 +198,9 @@ function newRunState(kind: "free" | "case", datasetId: string, request: string, 
     duration_ms: null,
     tag,
     pinned: false,
+    environment,
   };
+  history.createRun(run);
   runs.set(run.run_id, run);
   subscribers.set(run.run_id, new Set());
   return run;
@@ -233,11 +240,13 @@ function finish(run: RunState, error: unknown = null): void {
   run.finished_at = new Date().toISOString();
   run.duration_ms = Date.parse(run.finished_at) - Date.parse(run.started_at);
   if (error) emit(run.run_id, { type: "error", message: run.error! });
+  history.appendTurn(run.run_id, "assistant", run.reply);
+  history.saveRun(run);
   emit(run.run_id, { type: "done", run: publicRun(run) });
 }
 
 function startCaseRun(config: AppConfig, spec: CaseSpec): RunState {
-  const run = newRunState("case", spec.dataset_id ?? "", spec.request ?? spec.title, spec.auto_execute ?? true, spec.id, `案例: ${spec.title}`);
+  const run = newRunState("case", spec.dataset_id ?? "", spec.request ?? spec.title, spec.auto_execute ?? true, spec.id, `案例: ${spec.title}`, "dev");
   void (async () => {
     try {
       const result = await runCase(config, spec, makeSink(run));
@@ -274,7 +283,7 @@ function startFreeRun(
 ): RunState {
   const ds = config.datasets.get(datasetId);
   const defaultTag = ds?.name ? ds.name.replace(/（.*）/, "").trim() : (mode === "dev" ? "开发调试" : "生产回填");
-  const run = newRunState("free", datasetId, request, autoExecute, null, userTag || defaultTag);
+  const run = newRunState("free", datasetId, request, autoExecute, null, userTag || defaultTag, mode);
   void (async () => {
     let timer: NodeJS.Timeout | null = null;
     try {
@@ -337,6 +346,7 @@ function startFreeRun(
 function startAsk(config: AppConfig, run: RunState, message: string): void {
   const taskId = run.task_id;
   if (!taskId) throw new Error("任务尚未创建，无法追问");
+  history.appendTurn(run.run_id, "user", message);
   run.state = "running";
   run.error = null;
   run.finished_at = null;
@@ -421,8 +431,11 @@ function caseForRun(run: RunState, config: AppConfig): CaseSpec | null {
   }
 }
 
-function runSummaries(config: AppConfig) {
-  return [...runs.values()]
+function runSummaries(config: AppConfig, environment: EnvironmentUser) {
+  const persisted = history.listRuns(environment) as unknown as RunState[];
+  const merged = new Map(persisted.map((run) => [run.run_id, run]));
+  for (const run of runs.values()) if (run.environment === environment) merged.set(run.run_id, run);
+  return [...merged.values()]
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
@@ -486,6 +499,7 @@ function verifyAuth(req: http.IncomingMessage, config: AppConfig, url: URL): boo
 
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const config = loadConfig();
+  for (const [id, record] of transientDatasets) config.datasets.set(id, record);
   const url = new URL(req.url ?? "/", "http://localhost");
   const parts = url.pathname.split("/").filter(Boolean);
   const method = req.method ?? "GET";
@@ -537,6 +551,29 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     // GET /api/datasets
     if (method === "GET" && parts[1] === "datasets" && parts.length === 2) {
       return sendJson(res, 200, { datasets: datasetViews(config) });
+    }
+
+    // GET /api/mount-roots - only identifiers; never expose UNC or host paths.
+    if (method === "GET" && parts[1] === "mount-roots" && parts.length === 2) {
+      const mount_roots = [...config.mountRoots.values()].map((root) => {
+        try {
+          const directories = listDatasetDirectories(config, root.id);
+          return { mount_root_id: root.id, available: true, directories };
+        } catch (error) {
+          return { mount_root_id: root.id, available: false, directories: [], problem: error instanceof Error ? error.message : String(error) };
+        }
+      });
+      return sendJson(res, 200, { mount_roots });
+    }
+
+    // GET /api/mount-roots/:id/directories?path=relative/path
+    if (method === "GET" && parts[1] === "mount-roots" && parts[2] && parts[3] === "directories" && parts.length === 4) {
+      try {
+        return sendJson(res, 200, { directories: listDatasetDirectories(config, parts[2], url.searchParams.get("path") ?? "") });
+      } catch (error) {
+        if (error instanceof DatasetError) return sendError(res, 400, error.code, error.message);
+        throw error;
+      }
     }
 
     // GET /api/cases
@@ -687,17 +724,31 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 
     // GET /api/runs — 当前控制面进程里的历史运行摘要
     if (method === "GET" && parts[1] === "runs" && parts.length === 2) {
-      return sendJson(res, 200, { runs: runSummaries(config) });
+      return sendJson(res, 200, { runs: runSummaries(config, url.searchParams.get("mode") === "dev" ? "dev" : "prod") });
     }
 
     // POST /api/runs
     if (method === "POST" && parts[1] === "runs" && parts.length === 2) {
       const body = await readJsonBody(req);
       const request = String(body.request ?? "").trim();
-      const datasetId = String(body.dataset_id ?? "");
+      let datasetId = String(body.dataset_id ?? "");
       const runMode = (body.mode === "dev" || body.mode === "prod") ? body.mode : (config.devModeAllowed ? "dev" : "prod");
       if (!request) return sendError(res, 400, "REQUEST_REQUIRED", "需求不能为空");
-      if (!config.datasets.has(datasetId)) {
+      const mountRootId = typeof body.mount_root_id === "string" ? body.mount_root_id : "";
+      const relativePath = typeof body.relative_path === "string" ? body.relative_path : "";
+      if (datasetId && mountRootId) return sendError(res, 400, "DATASET_SELECTION_INVALID", "数据集和目录选择只能二选一");
+      if (mountRootId) {
+        try {
+          const selected = resolveDirectoryDataset(config, mountRootId, relativePath);
+          datasetId = selected.datasetId;
+          config.datasets.set(datasetId, selected.record);
+          transientDatasets.set(datasetId, selected.record);
+        } catch (error) {
+          if (error instanceof DatasetError) return sendError(res, 400, error.code, error.message);
+          throw error;
+        }
+      }
+      if (!datasetId || !config.datasets.has(datasetId)) {
         return sendError(res, 400, "DATASET_UNKNOWN", `未知 dataset_id: ${datasetId}`);
       }
       const { customFile } = getCustomTemplateFiles(config);
@@ -726,7 +777,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 
     // /api/runs/:id...
     if (parts[1] === "runs" && parts[2]) {
-      const run = runs.get(parts[2]);
+      const requestedEnvironment: EnvironmentUser = url.searchParams.get("mode") === "dev" ? "dev" : "prod";
+      const run = runs.get(parts[2]) ?? history.getRun(parts[2], requestedEnvironment) as RunState | null;
       if (!run) return sendError(res, 404, "RUN_NOT_FOUND", `未知 run_id: ${parts[2]}`);
 
       // PATCH /api/runs/:id - 更新会话标记或收藏
@@ -734,6 +786,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         const body = await readJsonBody(req);
         if (typeof body.tag === "string") run.tag = body.tag.trim();
         if (typeof body.pinned === "boolean") run.pinned = body.pinned;
+        history.saveRun(run);
         emit(run.run_id, { type: "snapshot", run: publicRun(run) });
         return sendJson(res, 200, { ok: true, run: publicRun(run) });
       }
@@ -758,7 +811,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
           write({ type: "done", run: publicRun(run) });
         }
         const listener = (event: unknown) => write(event);
-        subscribers.get(run.run_id)!.add(listener as never);
+        const subscriberSet = subscribers.get(run.run_id) ?? new Set<(event: ServerEvent) => void>();
+        subscribers.set(run.run_id, subscriberSet);
+        subscriberSet.add(listener as never);
         const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), HEARTBEAT_MS);
         req.on("close", () => {
           clearInterval(heartbeat);
@@ -848,6 +903,7 @@ async function listenOnFreePort(server: http.Server, host: string, preferred: nu
 }
 
 const bootConfig = config();
+history = new HistoryStore(bootConfig.databasePath);
 if (!fs.existsSync(bootConfig.workDir)) fs.mkdirSync(bootConfig.workDir, { recursive: true });
 const fixture = ensureFixture(bootConfig);
 

@@ -145,7 +145,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface RunStreamApi {
   state: RunStreamState;
-  startRun: (input: { request: string; dataset_id: string | null; auto_execute: boolean; mode?: AppMode; tag?: string }) => Promise<string | null>;
+  startRun: (input: { request: string; dataset_id?: string | null; mount_root_id?: string; relative_path?: string; auto_execute: boolean; mode?: AppMode; tag?: string }) => Promise<string | null>;
   startCase: (caseId: string) => Promise<string | null>;
   ask: (message: string) => Promise<void>;
   loadRun: (runId: string) => void;
@@ -435,10 +435,10 @@ export function useRunStream(): RunStreamApi {
   );
 
   const startRun = useCallback(
-    (input: { request: string; dataset_id: string | null; auto_execute: boolean; mode?: AppMode; tag?: string }) =>
+    (input: { request: string; dataset_id?: string | null; mount_root_id?: string; relative_path?: string; auto_execute: boolean; mode?: AppMode; tag?: string }) =>
       start(() => createRun(input), {
         prompt: input.request,
-        datasetId: input.dataset_id,
+        datasetId: input.dataset_id ?? (input.mount_root_id && input.relative_path ? `dir:${input.mount_root_id}:${input.relative_path}` : null),
         autoExecute: input.auto_execute,
       }),
     [start],

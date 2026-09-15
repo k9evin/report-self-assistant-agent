@@ -34,13 +34,13 @@ export function HistorySidebar({
 
   const load = useCallback(async () => {
     try {
-      const response = await fetchRuns();
+      const response = await fetchRuns(mode);
       setRuns(response.runs);
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, []);
+  }, [mode]);
 
   const handleTogglePin = useCallback(
     async (runId: string, pinned: boolean) => {

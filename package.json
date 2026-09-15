@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Report Self-Assistant Agent — agentic planning on a read-only mounted test-data filesystem, with a deterministic report workflow.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
