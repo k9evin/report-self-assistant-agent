@@ -1,6 +1,7 @@
 /** 顶部导航：无混淆 Logo、侧栏开关精准置左对齐、模式切换、主题与退出。 */
 import { cn } from "cn";
 
+import type { ResponseLanguage } from "../language";
 import type { AppMode } from "../mode";
 import type { Theme } from "../theme";
 import {
@@ -25,6 +26,8 @@ export function Nav({
   devModeAllowed = true,
   authRequired = false,
   onLogout,
+  responseLanguage = "auto",
+  onResponseLanguageChange,
 }: {
   tab: TabKey;
   onChangeTab: (tab: TabKey) => void;
@@ -37,6 +40,8 @@ export function Nav({
   devModeAllowed?: boolean;
   authRequired?: boolean;
   onLogout?: () => void;
+  responseLanguage?: ResponseLanguage;
+  onResponseLanguageChange?: (language: ResponseLanguage) => void;
 }) {
   const isDev = devModeAllowed && mode === "dev";
 
@@ -102,8 +107,34 @@ export function Nav({
           ) : null}
         </div>
 
-        {/* 右侧工具栏：模式切换、退出、主题切换 */}
+        {/* 右侧工具栏：语言、模式、退出、主题 */}
         <div className="flex items-center gap-2.5 shrink-0">
+          <div
+            className="flex items-center rounded-full border border-border/70 bg-muted/40 p-0.5 text-xs shadow-2xs"
+            role="radiogroup"
+            aria-label="回复语言"
+            title="回复语言"
+          >
+            {([
+              ["auto", "Auto"],
+              ["zh", "中"],
+              ["en", "EN"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-medium transition-all text-xs cursor-pointer",
+                  responseLanguage === value
+                    ? "bg-card text-foreground shadow-2xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => onResponseLanguageChange?.(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {/* 开发 / 上线模式切换器 */}
           {devModeAllowed ? (
             <div

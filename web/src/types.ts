@@ -152,6 +152,7 @@ export interface RunView {
   duration_ms?: number | null;
   tag?: string | null;
   pinned?: boolean;
+  response_language?: "auto" | "zh" | "en" | string;
 }
 
 /** SSE 载荷：契约里的 type 联合。快照/结束同时兼容内联 RunView 的写法。 */

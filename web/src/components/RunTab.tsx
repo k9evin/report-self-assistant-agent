@@ -14,6 +14,7 @@ import {
   updateRun,
   uploadTemplate,
 } from "../api";
+import type { ResponseLanguage } from "../language";
 import type { AppMode } from "../mode";
 import type { Dataset, MountRoot, TemplateInfo } from "../types";
 import { turnViews, useRunStream } from "../useRunStream";
@@ -42,11 +43,13 @@ export function RunTab({
   mode = "prod",
   onRunCreated,
   onNewSession,
+  responseLanguage = "auto",
 }: {
   selectedRunId?: string | null;
   mode?: AppMode;
   onRunCreated?: (runId: string) => void;
   onNewSession?: () => void;
+  responseLanguage?: ResponseLanguage;
 }) {
   const [datasets, setDatasets] = useState<Dataset[] | null>(null);
   const [datasetsError, setDatasetsError] = useState<string | null>(null);
@@ -194,12 +197,12 @@ export function RunTab({
     if (!canSend) return;
     setText("");
     if (started) {
-      void ask(message);
+      void ask(message, responseLanguage);
       return;
     }
     const newRunId = await startRun(datasetId
-      ? { request: message, dataset_id: datasetId, auto_execute: true, mode }
-      : { request: message, mount_root_id: mountRootId, relative_path: directoryPath, auto_execute: true, mode });
+      ? { request: message, dataset_id: datasetId, auto_execute: true, mode, response_language: responseLanguage }
+      : { request: message, mount_root_id: mountRootId, relative_path: directoryPath, auto_execute: true, mode, response_language: responseLanguage });
     if (newRunId) {
       onRunCreated?.(newRunId);
     }

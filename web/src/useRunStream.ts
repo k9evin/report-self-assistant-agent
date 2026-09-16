@@ -13,6 +13,7 @@ import {
   runStreamUrl,
 } from "./api";
 import type { AppMode } from "./mode";
+import type { ResponseLanguage } from "./language";
 import type { Check, RunError, RunView, ToolCall } from "./types";
 
 /** 一轮对话：首次运行是需求，之后每次追问各算一轮。 */
@@ -152,9 +153,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface RunStreamApi {
   state: RunStreamState;
-  startRun: (input: { request: string; dataset_id?: string | null; mount_root_id?: string; relative_path?: string; auto_execute: boolean; mode?: AppMode; tag?: string }) => Promise<string | null>;
+  startRun: (input: {
+    request: string;
+    dataset_id?: string | null;
+    mount_root_id?: string;
+    relative_path?: string;
+    auto_execute: boolean;
+    mode?: AppMode;
+    tag?: string;
+    response_language?: ResponseLanguage;
+  }) => Promise<string | null>;
   startCase: (caseId: string) => Promise<string | null>;
-  ask: (message: string) => Promise<void>;
+  ask: (message: string, responseLanguage?: ResponseLanguage) => Promise<void>;
   loadRun: (runId: string) => void;
   reconnect: () => void;
   reset: () => void;
@@ -443,7 +453,16 @@ export function useRunStream(): RunStreamApi {
   );
 
   const startRun = useCallback(
-    (input: { request: string; dataset_id?: string | null; mount_root_id?: string; relative_path?: string; auto_execute: boolean; mode?: AppMode; tag?: string }) =>
+    (input: {
+      request: string;
+      dataset_id?: string | null;
+      mount_root_id?: string;
+      relative_path?: string;
+      auto_execute: boolean;
+      mode?: AppMode;
+      tag?: string;
+      response_language?: ResponseLanguage;
+    }) =>
       start(() => createRun(input), {
         prompt: input.request,
         datasetId: input.dataset_id ?? (input.mount_root_id && input.relative_path ? `dir:${input.mount_root_id}:${input.relative_path}` : null),
@@ -459,7 +478,7 @@ export function useRunStream(): RunStreamApi {
   );
 
   const ask = useCallback(
-    async (message: string) => {
+    async (message: string, responseLanguage?: ResponseLanguage) => {
       const runId = state.runId;
       if (!runId) return;
       closeStream();
@@ -482,7 +501,7 @@ export function useRunStream(): RunStreamApi {
         ],
       }));
       try {
-        await askRun(runId, message);
+        await askRun(runId, message, responseLanguage);
       } catch (cause) {
         update((previous) => ({ ...previous, busy: false, finished: true, error: errorMessage(cause) }));
         return;

@@ -54,6 +54,7 @@ interface RunState {
   tag: string | null;
   pinned: boolean;
   environment: EnvironmentUser;
+  response_language?: "auto" | "zh" | "en";
 }
 
 type ServerEvent =
@@ -172,7 +173,16 @@ function datasetViews(config: AppConfig) {
 
 let runSeq = 0;
 
-function newRunState(kind: "free" | "case", datasetId: string, request: string, autoExecute: boolean, caseId: string | null, tag: string | null = null, environment: EnvironmentUser = "prod"): RunState {
+function newRunState(
+  kind: "free" | "case",
+  datasetId: string,
+  request: string,
+  autoExecute: boolean,
+  caseId: string | null,
+  tag: string | null = null,
+  environment: EnvironmentUser = "prod",
+  responseLanguage: "auto" | "zh" | "en" = "auto",
+): RunState {
   runSeq += 1;
   const run: RunState = {
     run_id: `run-${Date.now().toString(36)}-${runSeq.toString(36)}`,
@@ -199,6 +209,7 @@ function newRunState(kind: "free" | "case", datasetId: string, request: string, 
     tag,
     pinned: false,
     environment,
+    response_language: responseLanguage,
   };
   history.createRun(run);
   runs.set(run.run_id, run);
@@ -280,10 +291,11 @@ function startFreeRun(
   autoExecute: boolean,
   mode: "prod" | "dev" = "prod",
   userTag: string | null = null,
+  responseLanguage: "auto" | "zh" | "en" = "auto",
 ): RunState {
   const ds = config.datasets.get(datasetId);
   const defaultTag = ds?.name ? ds.name.replace(/（.*）/, "").trim() : (mode === "dev" ? "开发调试" : "生产回填");
-  const run = newRunState("free", datasetId, request, autoExecute, null, userTag || defaultTag, mode);
+  const run = newRunState("free", datasetId, request, autoExecute, null, userTag || defaultTag, mode, responseLanguage);
   void (async () => {
     let timer: NodeJS.Timeout | null = null;
     try {
@@ -321,6 +333,7 @@ function startFreeRun(
 
       const outcome = await createPlanner(config).runTask(task.task_id, {
         autoExecute,
+        responseLanguage,
         onEvent: (trace) => {
           const phase = trace.phase ?? "start";
           sink({ type: phase === "end" ? "tool_end" : "tool_start", name: trace.name, ok: trace.ok, at: trace.at });
@@ -343,9 +356,11 @@ function startFreeRun(
   return run;
 }
 
-function startAsk(config: AppConfig, run: RunState, message: string): void {
+function startAsk(config: AppConfig, run: RunState, message: string, responseLanguage?: "auto" | "zh" | "en"): void {
   const taskId = run.task_id;
   if (!taskId) throw new Error("任务尚未创建，无法追问");
+  if (responseLanguage) run.response_language = responseLanguage;
+  const lang = responseLanguage ?? run.response_language ?? "auto";
   history.appendTurn(run.run_id, "user", message);
   run.state = "running";
   run.error = null;
@@ -365,6 +380,7 @@ function startAsk(config: AppConfig, run: RunState, message: string): void {
         }
       }, 1000);
       const outcome = await createPlanner(config).ask(taskId, message, {
+        responseLanguage: lang,
         onEvent: (trace) => {
           const phase = trace.phase ?? "start";
           sink({ type: phase === "end" ? "tool_end" : "tool_start", name: trace.name, ok: trace.ok, at: trace.at });
@@ -757,7 +773,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         return sendError(res, 400, "TEMPLATE_REQUIRED", "请先上传待回填的 Excel 模板文件 (.xlsx)");
       }
       const userTag = typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : null;
-      const run = startFreeRun(config, datasetId, request, body.auto_execute !== false, runMode, userTag);
+      const responseLanguage = (body.response_language === "zh" || body.response_language === "en" || body.response_language === "auto")
+        ? body.response_language
+        : "auto";
+      const run = startFreeRun(config, datasetId, request, body.auto_execute !== false, runMode, userTag, responseLanguage);
       return sendJson(res, 202, { run_id: run.run_id, tag: run.tag });
     }
 
@@ -828,8 +847,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         const message = String(body.message ?? "").trim();
         if (!message) return sendError(res, 400, "MESSAGE_REQUIRED", "追问内容不能为空");
         if (run.state === "running") return sendError(res, 409, "RUN_BUSY", "这一轮还没跑完");
+        const responseLanguage = (body.response_language === "zh" || body.response_language === "en" || body.response_language === "auto")
+          ? body.response_language
+          : undefined;
         try {
-          startAsk(config, run, message);
+          startAsk(config, run, message, responseLanguage);
         } catch (error) {
           return sendError(res, 409, "ASK_FAILED", error instanceof Error ? error.message : String(error));
         }

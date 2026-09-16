@@ -61,6 +61,7 @@ export interface PlannerService {
     taskId: string,
     options?: {
       autoExecute?: boolean;
+      responseLanguage?: "auto" | "zh" | "en";
       onEvent?: (event: ToolCallTrace) => void;
       onText?: (delta: string) => void;
     },
@@ -69,6 +70,7 @@ export interface PlannerService {
     taskId: string,
     message: string,
     options?: {
+      responseLanguage?: "auto" | "zh" | "en";
       onEvent?: (event: ToolCallTrace) => void;
       onText?: (delta: string) => void;
     },
@@ -138,7 +140,13 @@ async function createModelRuntime(config: AppConfig): Promise<ModelRuntime> {
   return ModelRuntime.create(options);
 }
 
-function buildTaskPrompt(task: TaskRecord, options: { autoExecute: boolean }): string {
+export function buildTaskPrompt(task: TaskRecord, options: { autoExecute: boolean; responseLanguage?: "auto" | "zh" | "en" }): string {
+  const languageInstruction = (() => {
+    if (options.responseLanguage === "zh") return "语言要求：请全程使用中文回答与汇报。";
+    if (options.responseLanguage === "en") return "Language requirement: Please reply and report entirely in English.";
+    return "语言要求：请根据用户输入所使用的语言进行回答与汇报（用户使用中文则用中文，用户使用英文则用英文）。";
+  })();
+
   const lines = [
     `任务 ${task.task_id}`,
     "",
@@ -158,8 +166,10 @@ function buildTaskPrompt(task: TaskRecord, options: { autoExecute: boolean }): s
       ? "4. 验证通过（execution_allowed=true）后调用 execute_validated_plan 执行；"
       : "4. 本轮不要执行，验证通过即可停止；",
     options.autoExecute
-      ? "5. 用 get_task_status 取回统计，最后用中文向用户汇报：计划摘要、五道 Gate 与警告/阻断、执行结果（成功/带警告/失败数量）。"
-      : "5. 用中文向用户汇报：计划摘要、五道 Gate 与警告/阻断、需要用户拍板的事项。",
+      ? "5. 用 get_task_status 取回统计，最后向用户汇报：计划摘要、五道 Gate 与警告/阻断、执行结果（成功/带警告/失败数量）。"
+      : "5. 向用户汇报：计划摘要、五道 Gate 与警告/阻断、需要用户拍板的事项。",
+    "",
+    languageInstruction,
     "",
     "如果出现需求与模板矛盾、一对多、多个候选证据相似、目标列覆盖公式等情况，不要猜：停下来把冲突和两个可选方案讲清楚，交给用户决定。",
   ];
@@ -300,7 +310,7 @@ export class PiPlanner implements PlannerService {
   /** 无人值守跑完整任务：探测 → 计划 → Dry-Run →（可选）执行 → 汇报。 */
   async runTask(
     taskId: string,
-    options: { autoExecute?: boolean; onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
+    options: { autoExecute?: boolean; responseLanguage?: "auto" | "zh" | "en"; onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
   ): Promise<TaskOutcome> {
     const started = Date.now();
     const task = loadTask(this.config, taskId);
@@ -316,7 +326,7 @@ export class PiPlanner implements PlannerService {
     });
     const { reply, toolCalls } = await this.runTurn(
       task,
-      buildTaskPrompt(task, { autoExecute }),
+      buildTaskPrompt(task, { autoExecute, responseLanguage: options.responseLanguage }),
       options.onEvent,
       options.onText,
     );
@@ -329,12 +339,18 @@ export class PiPlanner implements PlannerService {
   async ask(
     taskId: string,
     message: string,
-    options: { onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
+    options: { responseLanguage?: "auto" | "zh" | "en"; onEvent?: (event: ToolCallTrace) => void; onText?: (delta: string) => void } = {},
   ): Promise<TaskOutcome> {
     const started = Date.now();
     const task = loadTask(this.config, taskId);
     appendEvent(this.config, taskId, { type: "agent.ask", message });
-    const { reply, toolCalls } = await this.runTurn(task, message, options.onEvent, options.onText);
+    const prompt = (() => {
+      if (options.responseLanguage === "zh") return `${message}\n\n（请全程使用中文回答与汇报）`;
+      if (options.responseLanguage === "en") return `${message}\n\n(Please reply and report entirely in English)`;
+      if (options.responseLanguage === "auto") return `${message}\n\n（请根据用户输入语言回答与汇报：用户使用中文则用中文，用户使用英文则用英文）`;
+      return message;
+    })();
+    const { reply, toolCalls } = await this.runTurn(task, prompt, options.onEvent, options.onText);
     return this.outcome(taskId, reply, toolCalls, started);
   }
 

@@ -8,6 +8,8 @@ import { HistorySidebar } from "./components/HistorySidebar";
 import { Nav } from "./components/Nav";
 import type { TabKey } from "./components/Nav";
 import { RunTab } from "./components/RunTab";
+import { readResponseLanguage, saveResponseLanguage } from "./language";
+import type { ResponseLanguage } from "./language";
 import { readAppMode, saveAppMode } from "./mode";
 import type { AppMode } from "./mode";
 import { applyTheme, readTheme } from "./theme";
@@ -31,6 +33,7 @@ function getInitialTab(): TabKey {
 export function App() {
   const [tab, setTab] = useState<TabKey>(() => getInitialTab());
   const [theme, setTheme] = useState<Theme>(() => readTheme());
+  const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(() => readResponseLanguage());
   const [mode, setMode] = useState<AppMode>(() => readAppMode());
   const [selectedRunId, setSelectedRunId] = useState<string | null>(() => getSessionIdFromPath());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -88,6 +91,11 @@ export function App() {
     () => setSidebarCollapsed((current) => !current),
     [],
   );
+
+  const handleResponseLanguageChange = useCallback((language: ResponseLanguage) => {
+    setResponseLanguage(language);
+    saveResponseLanguage(language);
+  }, []);
 
   const handleTabChange = useCallback(
     (newTab: TabKey) => {
@@ -168,6 +176,8 @@ export function App() {
         devModeAllowed={devModeAllowed}
         authRequired={authRequired}
         onLogout={handleLogout}
+        responseLanguage={responseLanguage}
+        onResponseLanguageChange={handleResponseLanguageChange}
       />
 
       {/* 若 .env 启用了访问鉴权且未通过验证，展示登录卡片阻断主流程 */}
@@ -192,6 +202,7 @@ export function App() {
                   mode={mode}
                   onRunCreated={handleRunCreated}
                   onNewSession={startNew}
+                  responseLanguage={responseLanguage}
                 />
               ) : devModeAllowed && mode === "dev" ? (
                 <CasesTab />
@@ -201,6 +212,7 @@ export function App() {
                   mode={mode}
                   onRunCreated={handleRunCreated}
                   onNewSession={startNew}
+                  responseLanguage={responseLanguage}
                 />
               )}
             </div>

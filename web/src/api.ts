@@ -16,6 +16,7 @@ import type {
   TemplateUploadResponse,
 } from "./types";
 import type { AppMode } from "./mode";
+import type { ResponseLanguage } from "./language";
 
 const AUTH_STORAGE_KEY = "report-agent-auth-token";
 
@@ -196,6 +197,7 @@ export function createRun(body: {
   auto_execute: boolean;
   mode?: AppMode;
   tag?: string;
+  response_language?: ResponseLanguage;
 }): Promise<RunCreatedResponse> {
   return post("/api/runs", body) as Promise<RunCreatedResponse>;
 }
@@ -211,8 +213,8 @@ export function createCaseRun(caseId: string): Promise<RunCreatedResponse> {
   return post("/api/runs/case", { case_id: caseId }) as Promise<RunCreatedResponse>;
 }
 
-export function askRun(runId: string, message: string): Promise<OkResponse> {
-  return post(`/api/runs/${encodeURIComponent(runId)}/ask`, { message }) as Promise<OkResponse>;
+export function askRun(runId: string, message: string, response_language?: ResponseLanguage): Promise<OkResponse> {
+  return post(`/api/runs/${encodeURIComponent(runId)}/ask`, { message, response_language }) as Promise<OkResponse>;
 }
 
 export function runStreamUrl(runId: string, mode: AppMode = "prod"): string {
