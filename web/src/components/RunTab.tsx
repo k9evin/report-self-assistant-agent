@@ -104,8 +104,8 @@ export function RunTab({
         const firstAvailable = body.datasets.find((entry) => entry.available);
         setDatasetId((current) => current || devDefault?.dataset_id || firstAvailable?.dataset_id || "");
       } else {
-        const prodAvailable = body.datasets.find((entry) => entry.available && entry.mount_root_id !== "dev");
-        setDatasetId((current) => (current && current !== "ds_dev_fixture" ? current : prodAvailable?.dataset_id || ""));
+        // 上线模式中不预置或自动选中夹具数据集，由用户直接选择服务器挂载目录
+        setDatasetId("");
       }
     } catch (cause) {
       setDatasetsError(errorMessage(cause));
@@ -117,8 +117,11 @@ export function RunTab({
 
   useEffect(() => {
     void loadDatasets();
+  }, [loadDatasets]);
+
+  useEffect(() => {
     void loadTemplate();
-  }, [loadDatasets, loadTemplate]);
+  }, [loadTemplate]);
 
   // 当模式切换时，联动默认配置：
   // 1. 开发模式：预置默认测试 Prompt、默认测试夹具数据集以及默认模板
@@ -128,14 +131,14 @@ export function RunTab({
       if (!text.trim()) {
         setText(DEFAULT_REQUEST);
       }
-      setDatasetId((curr) => (!curr || curr === "" ? "ds_dev_fixture" : curr));
+      setDatasetId((curr) => (!curr && !mountRootId ? "ds_dev_fixture" : curr));
     } else {
       if (text === DEFAULT_REQUEST) {
         setText("");
       }
-      setDatasetId((curr) => (curr === "ds_dev_fixture" ? "" : curr));
+      setDatasetId("");
     }
-  }, [mode]);
+  }, [mode, mountRootId]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -179,7 +182,7 @@ export function RunTab({
   }, [state.reply, state.tools.length, state.started, state.finished, state.runId]);
 
   const hasTemplate = Boolean(templateInfo?.has_template);
-  const canSend = !busy && text.trim().length > 0 && (started || datasetId !== "" || (mountRootId !== "" && directoryPath !== ""));
+  const canSend = !busy && text.trim().length > 0 && (started || datasetId !== "" || mountRootId !== "");
 
   const submit = async () => {
     const message = text.trim();
@@ -218,7 +221,9 @@ export function RunTab({
   const datasetRow = (
     <div className="flex w-full flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-xs font-semibold text-foreground">目标数据集</span>
+        <span className="text-xs font-semibold text-foreground">
+          {mode === "dev" ? "目标数据集" : "目标数据源"}
+        </span>
         {loadingDatasets ? (
           <LoadingDots label="正在读取数据源…" />
         ) : datasetsError ? (
@@ -226,7 +231,7 @@ export function RunTab({
         ) : (
           <DirectoryTreeSelect
             roots={mountRoots}
-            presets={datasets ?? []}
+            presets={mode === "dev" ? (datasets ?? []) : []}
             value={
               datasetId
                 ? { datasetId, mountRootId, relativePath: directoryPath, label: selectedDataset?.name ?? datasetId }

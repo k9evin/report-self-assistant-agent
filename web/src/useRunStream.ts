@@ -13,7 +13,7 @@ import {
   runStreamUrl,
 } from "./api";
 import type { AppMode } from "./mode";
-import type { Check, RunView, ToolCall } from "./types";
+import type { Check, RunError, RunView, ToolCall } from "./types";
 
 /** 一轮对话：首次运行是需求，之后每次追问各算一轮。 */
 export interface Turn {
@@ -117,6 +117,12 @@ function mergeChecks(checks: Check[], incoming: Check[]): Check[] {
   return next;
 }
 
+function formatRunError(err: string | RunError | null | undefined): string | null {
+  if (!err) return null;
+  if (typeof err === "string") return err;
+  return err.message || err.code || JSON.stringify(err);
+}
+
 function applySnapshot(state: RunStreamState, run: RunView): RunStreamState {
   const incomingTools = run.tool_calls ?? [];
   const incomingChecks = run.checks ?? [];
@@ -128,6 +134,7 @@ function applySnapshot(state: RunStreamState, run: RunView): RunStreamState {
     turns,
     run,
     phase: run.phase ?? state.phase,
+    error: formatRunError(run.error) ?? state.error,
     // 快照里是服务端累积的权威列表：不比本地少就整体替换，否则只补齐本地缺的条目。
     tools:
       incomingTools.length >= state.tools.length
@@ -296,6 +303,7 @@ export function useRunStream(): RunStreamApi {
               busy: false,
               finished: true,
               reconnecting: false,
+              error: formatRunError(run?.error) ?? merged.error,
             };
           });
           closeStream();

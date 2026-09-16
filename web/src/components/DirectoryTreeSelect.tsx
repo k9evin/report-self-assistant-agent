@@ -101,7 +101,14 @@ export function DirectoryTreeSelect({
       setSelectedDatasetId("");
       setSelectedRootId(rootId);
       setSelectedPath("");
-      setSelectedLabel(`[${rootId}] 根目录`);
+      const label = `[${rootId}] 根目录`;
+      setSelectedLabel(label);
+      onSelect({
+        datasetId: "",
+        mountRootId: rootId,
+        relativePath: "",
+        label,
+      });
     }
     setActiveSegmentPaths([]);
 
@@ -190,6 +197,19 @@ export function DirectoryTreeSelect({
     const nextActive = [...activeSegmentPaths.slice(0, columnIndex), entry.relative_path];
     setActiveSegmentPaths(nextActive);
 
+    // 点中目录即代表选中，无需多余确认
+    const label = `[${activeRootId}] /${entry.relative_path}`;
+    setSelectedDatasetId("");
+    setSelectedRootId(activeRootId);
+    setSelectedPath(entry.relative_path);
+    setSelectedLabel(label);
+    onSelect({
+      datasetId: "",
+      mountRootId: activeRootId,
+      relativePath: entry.relative_path,
+      label,
+    });
+
     const nextColIndex = columnIndex + 1;
     setColumns((prev) => prev.slice(0, nextColIndex));
     void loadLevel(activeRootId, entry.relative_path, nextColIndex);
@@ -200,33 +220,12 @@ export function DirectoryTreeSelect({
     setSelectedRootId(preset.mount_root_id ?? "");
     setSelectedPath(preset.relative_path ?? "");
     setSelectedLabel(preset.name);
-  };
-
-  const handleChooseDirectory = (rootId: string, relPath: string) => {
-    setSelectedDatasetId("");
-    setSelectedRootId(rootId);
-    setSelectedPath(relPath);
-    setSelectedLabel(relPath ? `[${rootId}] /${relPath}` : `[${rootId}] 根目录`);
-  };
-
-  const handleConfirm = () => {
-    if (selectedDatasetId) {
-      onSelect({
-        datasetId: selectedDatasetId,
-        mountRootId: selectedRootId,
-        relativePath: selectedPath,
-        label: selectedLabel || selectedDatasetId,
-      });
-    } else if (selectedRootId) {
-      onSelect({
-        datasetId: "",
-        mountRootId: selectedRootId,
-        relativePath: selectedPath,
-        label: selectedLabel || (selectedPath ? `${selectedRootId}/${selectedPath}` : selectedRootId),
-      });
-    } else {
-      onSelect(null);
-    }
+    onSelect({
+      datasetId: preset.dataset_id,
+      mountRootId: preset.mount_root_id ?? "",
+      relativePath: preset.relative_path ?? "",
+      label: preset.name,
+    });
     setOpen(false);
   };
 
@@ -258,6 +257,17 @@ export function DirectoryTreeSelect({
       onClick: () => {
         setActiveSegmentPaths([]);
         setColumns((prev) => prev.slice(0, 1));
+        const label = `[${activeRootId}] 根目录`;
+        setSelectedDatasetId("");
+        setSelectedRootId(activeRootId);
+        setSelectedPath("");
+        setSelectedLabel(label);
+        onSelect({
+          datasetId: "",
+          mountRootId: activeRootId,
+          relativePath: "",
+          label,
+        });
       },
     });
     activeSegmentPaths.forEach((path, idx) => {
@@ -267,6 +277,17 @@ export function DirectoryTreeSelect({
         onClick: () => {
           setActiveSegmentPaths(activeSegmentPaths.slice(0, idx + 1));
           setColumns((prev) => prev.slice(0, idx + 2));
+          const label = `[${activeRootId}] /${path}`;
+          setSelectedDatasetId("");
+          setSelectedRootId(activeRootId);
+          setSelectedPath(path);
+          setSelectedLabel(label);
+          onSelect({
+            datasetId: "",
+            mountRootId: activeRootId,
+            relativePath: path,
+            label,
+          });
         },
       });
     });
@@ -282,7 +303,7 @@ export function DirectoryTreeSelect({
             "group relative flex h-8 min-w-56 max-w-80 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground shadow-2xs transition-all hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             displayLabel && "border-brand/40 bg-brand/5 text-brand font-medium"
           )}
-          title={displayLabel ? `已选目标数据集：${displayLabel}` : "选择目标数据集或服务器挂载目录"}
+          title={displayLabel ? `已选目标：${displayLabel}` : presets.length > 0 ? "选择目标数据集或服务器挂载目录" : "选择服务器挂载目录"}
         >
           <div className="flex items-center gap-1.5 truncate">
             {value?.datasetId || selectedDatasetId ? (
@@ -290,7 +311,7 @@ export function DirectoryTreeSelect({
             ) : (
               <HardDrive className="size-3.5 shrink-0 opacity-70" />
             )}
-            <span className="truncate">{displayLabel || "选择目标数据集 / 服务器目录"}</span>
+            <span className="truncate">{displayLabel || (presets.length > 0 ? "选择目标数据集 / 服务器目录" : "选择服务器挂载目录")}</span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
             {displayLabel && !disabled ? (
@@ -321,10 +342,12 @@ export function DirectoryTreeSelect({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
               <FolderOpen className="size-4 text-brand" />
-              <span>目标数据集与服务器目录级联选择器</span>
+              <span>{presets.length > 0 ? "目标数据集与服务器目录级联选择器" : "服务器挂载目录级联选择器"}</span>
             </div>
             <span className="text-[11px] text-muted-foreground">
-              支持预设快捷数据集，也可按挂载逐级展开选用
+              {presets.length > 0
+                ? "支持预设快捷数据集，也可按挂载逐级展开选用"
+                : "请在左侧选择挂载共享，逐级展开并点击「选择」确定目标目录"}
             </span>
           </div>
 
@@ -369,12 +392,6 @@ export function DirectoryTreeSelect({
                         <div
                           key={preset.dataset_id}
                           onClick={() => preset.available && handleChoosePreset(preset)}
-                          onDoubleClick={() => {
-                            if (preset.available) {
-                              handleChoosePreset(preset);
-                              handleConfirm();
-                            }
-                          }}
                           className={cn(
                             "group flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors cursor-pointer",
                             !preset.available && "opacity-50 cursor-not-allowed",
@@ -419,40 +436,28 @@ export function DirectoryTreeSelect({
                       return (
                         <div
                           key={root.mount_root_id}
-                          onClick={() => root.available && selectRoot(root.mount_root_id, false)}
+                          onClick={() => root.available && selectRoot(root.mount_root_id, true)}
                           className={cn(
                             "group flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors cursor-pointer",
                             !root.available && "opacity-50 cursor-not-allowed",
-                            isActive
-                              ? "bg-muted font-medium text-foreground"
-                              : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+                            isSelected
+                              ? "bg-brand/15 text-brand font-medium border border-brand/30"
+                              : isActive
+                                ? "bg-muted font-medium text-foreground"
+                                : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
                           )}
+                          title={root.available ? `选用 [${root.mount_root_id}] 根目录` : "挂载不可用"}
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <HardDrive className="size-3.5 shrink-0 text-brand" />
+                            <HardDrive className={cn("size-3.5 shrink-0", isSelected ? "text-brand" : "text-muted-foreground")} />
                             <span className="truncate font-mono text-[11px]">{root.mount_root_id}</span>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            {root.available ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleChooseDirectory(root.mount_root_id, "");
-                                }}
-                                className={cn(
-                                  "rounded px-1.5 py-0.5 text-[10px] font-normal transition-all",
-                                  isSelected
-                                    ? "bg-brand text-brand-foreground font-semibold"
-                                    : "text-muted-foreground hover:bg-brand/15 hover:text-brand"
-                                )}
-                                title="选用此根目录作为目标数据集"
-                              >
-                                {isSelected ? "已选根" : "选根"}
-                              </button>
-                            ) : (
+                            {!root.available ? (
                               <span className="text-[10px] text-destructive">不可用</span>
-                            )}
+                            ) : isSelected ? (
+                              <Check className="size-3 text-brand" />
+                            ) : null}
                             <ChevronRight className="size-3.5 text-muted-foreground/60" />
                           </div>
                         </div>
@@ -493,22 +498,10 @@ export function DirectoryTreeSelect({
                       </button>
                     </div>
                   ) : col.entries.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
-                      <span>此目录下无子目录</span>
-                      <button
-                        type="button"
-                        onClick={() => handleChooseDirectory(activeRootId, col.path)}
-                        className={cn(
-                          "rounded-md border border-brand/40 px-2.5 py-1 text-[11px] font-medium transition-all shadow-2xs",
-                          !selectedDatasetId && selectedRootId === activeRootId && selectedPath === col.path
-                            ? "bg-brand text-brand-foreground"
-                            : "bg-brand/10 text-brand hover:bg-brand/20"
-                        )}
-                      >
-                        {!selectedDatasetId && selectedRootId === activeRootId && selectedPath === col.path
-                          ? "✓ 当前已选此目录"
-                          : "选用此目录作为数据集"}
-                      </button>
+                    <div className="p-4 text-center text-xs text-muted-foreground flex flex-col items-center gap-1.5">
+                      <FolderOpen className="size-4 text-muted-foreground/40 mb-1" />
+                      <span>无子目录</span>
+                      <span className="text-[11px] font-medium text-brand">已选当前目录</span>
                     </div>
                   ) : (
                     col.entries.map((entry) => {
@@ -522,44 +515,28 @@ export function DirectoryTreeSelect({
                         <div
                           key={entry.relative_path}
                           onClick={() => handleEntryClick(entry, colIndex)}
-                          onDoubleClick={() => {
-                            handleChooseDirectory(activeRootId, entry.relative_path);
-                            handleConfirm();
-                          }}
                           className={cn(
                             "group flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors cursor-pointer",
-                            isActive
-                              ? "bg-muted font-medium text-foreground"
-                              : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+                            isSelected
+                              ? "bg-brand/15 text-brand font-medium border border-brand/30"
+                              : isActive
+                                ? "bg-muted font-medium text-foreground"
+                                : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
                           )}
+                          title={`选中目录: ${entry.name}`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
                             <Folder
                               className={cn(
                                 "size-3.5 shrink-0",
-                                isActive ? "text-brand" : "text-muted-foreground"
+                                isSelected || isActive ? "text-brand" : "text-muted-foreground"
                               )}
                             />
                             <span className="truncate font-mono text-[11px]">{entry.name}</span>
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleChooseDirectory(activeRootId, entry.relative_path);
-                              }}
-                              className={cn(
-                                "rounded px-1.5 py-0.5 text-[10px] font-normal transition-all",
-                                isSelected
-                                  ? "bg-brand text-brand-foreground font-semibold"
-                                  : "text-muted-foreground hover:bg-brand/15 hover:text-brand"
-                              )}
-                              title="选择此目录作为目标数据集"
-                            >
-                              {isSelected ? "已选" : "选择"}
-                            </button>
+                            {isSelected ? <Check className="size-3 text-brand" /> : null}
                             <ChevronRight className="size-3.5 text-muted-foreground/60" />
                           </div>
                         </div>
@@ -574,14 +551,16 @@ export function DirectoryTreeSelect({
 
         {/* 底部控制栏 */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/20 px-3.5 py-2.5">
-          <div className="flex items-center gap-2 text-xs truncate max-w-[65%]">
-            <span className="font-semibold text-foreground shrink-0">已选目标:</span>
+          <div className="flex items-center gap-2 text-xs truncate max-w-[75%]">
+            <span className="font-semibold text-foreground shrink-0">当前选中:</span>
             {selectedLabel || selectedRootId ? (
               <span className="font-mono text-brand font-medium truncate bg-brand/10 px-2 py-0.5 rounded border border-brand/20">
                 {selectedLabel || `[${selectedRootId}] ${selectedPath ? `/${selectedPath}` : "（根目录）"}`}
               </span>
             ) : (
-              <span className="text-muted-foreground italic">未选择任何数据集或目录</span>
+              <span className="text-muted-foreground italic">
+                {presets.length > 0 ? "未选择任何数据集或目录" : "未选择任何挂载目录"}
+              </span>
             )}
           </div>
 
@@ -598,17 +577,9 @@ export function DirectoryTreeSelect({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-lg border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
               className="flex items-center gap-1 rounded-lg bg-brand px-3.5 py-1 text-xs font-semibold text-brand-foreground shadow-2xs hover:bg-brand/90 transition-all"
             >
-              <Check className="size-3.5" />
-              <span>确认选择</span>
+              完成
             </button>
           </div>
         </div>
